@@ -1,0 +1,74 @@
+.stage {
+  background: radial-gradient(120% 80% at 50% 0%, #131416 0%, #08090a 70%);
+}
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(to right bottom, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+.stage-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 16px 16px;
+  mask-image: radial-gradient(70% 60% at 50% 40%, #000 30%, transparent 100%);
+}
+
+/* The dot rides a track as wide (or tall) as the wire, so it moves with translate only. */
+.wire-track {
+  position: absolute;
+  inset: 0;
+  translate: 0 0;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wire-track[data-on] {
+    animation: wire-v 600ms cubic-bezier(0.455, 0.03, 0.515, 0.955) forwards;
+  }
+  @media (min-width: 768px) {
+    .wire-track[data-on] {
+      animation-name: wire-h;
+    }
+  }
+}
+
+/* Reduced motion shows the finished run, so nothing inside the stage should move into place. */
+@media (prefers-reduced-motion: reduce) {
+  .stage * {
+    transition: none !important;
+  }
+}
+@keyframes wire-v {
+  0% { translate: 0 0; opacity: 0; }
+  20%, 80% { opacity: 1; }
+  100% { translate: 0 100%; opacity: 0; }
+}
+@keyframes wire-h {
+  0% { translate: 0 0; opacity: 0; }
+  20%, 80% { opacity: 1; }
+  100% { translate: 100% 0; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .enter {
+    animation: enter-rise var(--dur, 700ms) cubic-bezier(0.25, 0.1, 0.25, 1) var(--delay, 0ms) both;
+  }
+  .enter-blur {
+    animation: enter-blur 1000ms cubic-bezier(0.25, 0.1, 0.25, 1) var(--delay, 0ms) both;
+  }
+}
+@keyframes enter-blur {
+  from { opacity: 0; filter: blur(10px); transform: translateY(20%); }
+}
+@keyframes enter-rise {
+  from { opacity: 0; transform: translateY(8px); }
+}
