@@ -100,6 +100,7 @@ There are no other endpoints.
 | `/work` | 512 MB tmpfs on the host, per run |
 | Network | none (own network namespace, `runsc --network=none`) |
 | Concurrency | 2 runs at once, 10 waiting, then 429 |
+| Large requests | 2 in flight with a body over 1 MiB (as many as run slots), then 429. Small ones queue as usual |
 
 ## What a run looks like
 

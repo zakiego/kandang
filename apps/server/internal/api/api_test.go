@@ -511,3 +511,59 @@ func TestRunResponseHasAWriteDeadline(t *testing.T) {
 		t.Errorf("the deadline wasn't cleared after the response: %v", w.deadlines[1])
 	}
 }
+
+// Twelve requests may be in flight (2 running, 10 waiting), each with its
+// input files decoded in memory. Only two of them may be large.
+func TestLargeBodiesInFlightAreCapped(t *testing.T) {
+	f := &fakeRunner{ready: true, block: make(chan struct{}), start: make(chan struct{}, 2)}
+	q := queue.New(2, 10)
+	h := newTest(t, f, q)
+	large := map[string]any{"language": "bash", "code": "x", "files": []map[string]string{
+		{"name": "a.bin", "content": base64.StdEncoding.EncodeToString(make([]byte, 2*LargeBodyBytes))},
+	}}
+	small := `{"language":"bash","code":"x"}`
+
+	var wg sync.WaitGroup
+	codes := make(chan int, 3)
+	send := func(body any) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codes <- do(h, "POST", "/v1/runs", testToken, body).Code
+		}()
+	}
+	send(large)
+	<-f.start
+	send(large)
+	<-f.start
+
+	w := do(h, "POST", "/v1/runs", testToken, large)
+	if w.Code != 429 || errCode(t, w) != "busy" || w.Header().Get("Retry-After") == "" {
+		t.Fatalf("third large request: %d %s", w.Code, w.Body)
+	}
+	// A small request still gets a place in line.
+	send(small)
+	deadline := time.Now().Add(3 * time.Second)
+	for q.Stats() != (queue.Stats{Running: 2, Waiting: 1}) {
+		if time.Now().After(deadline) {
+			t.Fatalf("stats = %+v", q.Stats())
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	f.mu.Lock()
+	f.start = nil
+	f.mu.Unlock()
+	close(f.block)
+	wg.Wait()
+	close(codes)
+	for c := range codes {
+		if c != 200 {
+			t.Errorf("admitted run got %d", c)
+		}
+	}
+	// The places are free again once those runs are done.
+	if w := do(h, "POST", "/v1/runs", testToken, large); w.Code != 200 {
+		t.Errorf("large request after the others finished: %d %s", w.Code, w.Body)
+	}
+}

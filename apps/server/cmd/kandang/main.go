@@ -136,7 +136,7 @@ func serve(cfg config.Config, stderr io.Writer) error {
 	}
 	handler := api.New(api.Options{
 		Runner: runner, Queue: queue.New(cfg.MaxRunning, cfg.MaxWaiting), Token: token,
-		Version: version, Limits: cfg.Limits, Log: log,
+		Version: version, Limits: cfg.Limits, Log: log, MaxLargeBodies: cfg.MaxRunning,
 	})
 	// Every request context derives from base, so a shutdown cancels the runs
 	// in flight, which kills their sandboxes and runs their cleanup.

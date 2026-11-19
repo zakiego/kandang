@@ -29,6 +29,11 @@ import (
 // 6 bytes), and room for names and field syntax.
 const MaxBodyBytes = sandbox.MaxInputBytes/3*4 + sandbox.MaxCodeBytes*6 + 1<<20
 
+// LargeBodyBytes is where a request body starts to count as large. A large
+// body costs kandang several times its size while it is decoded, and its
+// files stay in memory until the run ends, so only a few may be in flight.
+const LargeBodyBytes = 1 << 20
+
 // ResponseWriteTimeout is how long a client gets to read a run's response.
 // The run slot is held until then, so a client that stops reading can't keep
 // it forever.
@@ -43,11 +48,16 @@ type Options struct {
 	Limits  sandbox.Limits
 	Log     *slog.Logger
 	NewID   func() string // run ids; sandbox.NewID when nil
+	// MaxLargeBodies is how many requests with a body over LargeBodyBytes may
+	// be in flight at once (being read, waiting or running). More get 429.
+	// 2 when zero.
+	MaxLargeBodies int
 }
 
 type server struct {
 	opt       Options
 	tokenHash [32]byte
+	large     chan struct{} // one place per large request in flight
 }
 
 // New returns the HTTP handler.
@@ -58,7 +68,10 @@ func New(opt Options) http.Handler {
 	if opt.NewID == nil {
 		opt.NewID = sandbox.NewID
 	}
-	s := &server{opt: opt, tokenHash: sha256.Sum256(opt.Token)}
+	if opt.MaxLargeBodies < 1 {
+		opt.MaxLargeBodies = 2
+	}
+	s := &server{opt: opt, tokenHash: sha256.Sum256(opt.Token), large: make(chan struct{}, opt.MaxLargeBodies)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("POST /v1/runs", s.run)
@@ -180,6 +193,21 @@ func (s *server) run(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength > MaxBodyBytes {
 		writeError(w, http.StatusRequestEntityTooLarge, "body_too_large", fmt.Sprintf("request body is over %d bytes", MaxBodyBytes))
 		return
+	}
+	// Requests wait for a run slot with their files already decoded, so the
+	// large ones are counted before a byte of the body is read. Without this,
+	// twelve 50 MiB requests at once take kandang past its own memory cap,
+	// and the kernel kills it along with every run in flight. A body without
+	// a Content-Length could be any size, so it counts as large.
+	if r.ContentLength < 0 || r.ContentLength > LargeBodyBytes {
+		select {
+		case s.large <- struct{}{}:
+			defer func() { <-s.large }()
+		default:
+			w.Header().Set("Retry-After", "10")
+			writeError(w, http.StatusTooManyRequests, "busy", "too many requests with large input files are in flight; try again shortly")
+			return
+		}
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
 	var req RunRequest
