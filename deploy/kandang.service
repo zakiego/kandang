@@ -19,6 +19,10 @@ ExecStart=/opt/kandang/bin/kandang serve
 Environment=GOMEMLIMIT=600MiB
 # Optional overrides (KANDANG_LISTEN, KANDANG_MAX_RUNNING, ...), one per line.
 EnvironmentFile=-/etc/kandang/kandang.conf
+# Runs live in their own cgroups, outside this unit, so systemd doesn't stop
+# them. If kandang dies without cleaning up (killed, or it can't start
+# again), nothing enforces their timeouts any more: kill whatever is left.
+ExecStopPost=/bin/sh -c 'for k in /sys/fs/cgroup/kandang/*/cgroup.kill; do [ -w "$$k" ] && echo 1 > "$$k"; done; exit 0'
 Restart=on-failure
 RestartSec=2s
 # SIGTERM cancels the runs in flight; give their cleanup time.
