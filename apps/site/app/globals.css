@@ -1,0 +1,27 @@
+@layer ui-sdk;
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-feature-settings: "cv01", "ss03";
+}
+
+:focus-visible {
+  outline: 1px solid #5e69d1;
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in lch, #5e6ad2, black 10%);
+  color: #fff;
+}
