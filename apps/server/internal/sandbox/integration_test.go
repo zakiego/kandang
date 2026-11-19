@@ -306,6 +306,80 @@ os.symlink("/etc/passwd", "/work/out/passwd-link")
 	}
 }
 
+func TestITOutIsASymlink(t *testing.T) {
+	res := runJob(t, "out-symlink", LangBash, `rmdir /work/out && ln -s /etc /work/out && ls /work/out | head -3`, 30*time.Second)
+	if len(res.Files) != 0 {
+		t.Errorf("%d host files came back through a symlinked /work/out", len(res.Files))
+	}
+	if len(res.Dropped) != 1 || res.Dropped[0].Reason != DropOutMissing {
+		t.Errorf("dropped = %+v", res.Dropped)
+	}
+}
+
+// The script exits while a child keeps swapping /work/out for a symlink to
+// the host's /etc. The child must be dead before the outputs are read, and
+// nothing from the host may come back either way.
+func TestITOutputsSwapRace(t *testing.T) {
+	for round := range 5 {
+		res := runJob(t, fmt.Sprintf("out-swap-%d", round), LangBash, `
+echo real > /work/out/hostname
+( while :; do
+    mv /work/out /work/parked && ln -s /etc /work/out
+    rm /work/out && mv /work/parked /work/out
+  done ) >/dev/null 2>&1 &
+sleep 0.2
+exit 0
+`, 30*time.Second)
+		if res.ExitCode != 0 {
+			t.Errorf("exit %d: %s", res.ExitCode, res.Stderr.Data)
+		}
+		for _, f := range res.Files {
+			if f.Name != "hostname" || strings.TrimSpace(string(f.Data)) != "real" {
+				t.Errorf("a file from outside /work/out came back: %s (%d bytes)", f.Name, len(f.Data))
+			}
+		}
+	}
+}
+
+func TestITManyOutputEntries(t *testing.T) {
+	res := runJob(t, "many-outputs", LangBash, `
+cd /work/out
+for i in $(seq 1 3000); do : > "f$i"; done
+ls | wc -l
+`, 60*time.Second)
+	if res.ExitCode != 0 || strings.TrimSpace(string(res.Stdout.Data)) != "3000" {
+		t.Fatalf("exit %d: %s %s", res.ExitCode, res.Stdout.Data, res.Stderr.Data)
+	}
+	if len(res.Files) != MaxOutputFiles {
+		t.Errorf("files = %d, want %d", len(res.Files), MaxOutputFiles)
+	}
+	if len(res.Dropped) != MaxDroppedListed+2 || res.Dropped[len(res.Dropped)-1].Reason != DropTooManyEntries {
+		t.Errorf("dropped has %d entries, want %d named and two notes", len(res.Dropped), MaxDroppedListed)
+	}
+}
+
+// The most a run may return: 10 files of 15 MiB.
+func TestITLargestOutput(t *testing.T) {
+	res := runJob(t, "max-output", LangBash, `
+for i in 0 1 2 3 4 5 6 7 8 9; do head -c 15728640 /dev/zero > /work/out/f$i.bin; done
+head -c 15728641 /dev/zero > /work/out/too-big.bin
+`, 60*time.Second)
+	if res.ExitCode != 0 {
+		t.Fatalf("exit %d: %s", res.ExitCode, res.Stderr.Data)
+	}
+	if len(res.Files) != MaxOutputFiles {
+		t.Fatalf("files = %d, want %d", len(res.Files), MaxOutputFiles)
+	}
+	for _, f := range res.Files {
+		if len(f.Data) != MaxOutputFileBytes {
+			t.Errorf("%s is %d bytes", f.Name, len(f.Data))
+		}
+	}
+	if len(res.Dropped) != 1 || res.Dropped[0].Reason != DropTooLarge {
+		t.Errorf("dropped = %+v", res.Dropped)
+	}
+}
+
 func TestITTwoAtOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	start := time.Now()
