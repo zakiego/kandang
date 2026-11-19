@@ -109,6 +109,9 @@ const (
 	DropBadName    = "file name isn't allowed"
 	DropOutMissing = "/work/out isn't a directory"
 	DropChanged    = "changed while it was being read"
+
+	DropTooManyEntries = "more than 1000 entries in /work/out; the rest were not looked at"
+	DropMoreFormat     = "%d more entries were dropped; only the first 100 are listed"
 )
 
 // CollectOutputs reads the top-level regular files in dir/out after a run,
@@ -144,9 +147,21 @@ func CollectOutputs(dir string) ([]File, []Dropped, error) {
 		return nil, []Dropped{{Name: "out", Reason: DropOutMissing}}, nil
 	}
 	defer root.Close()
-	entries, err := fs.ReadDir(root.FS(), ".")
+	// The sandbox can leave hundreds of thousands of entries here. Only the
+	// first MaxOutputScan are looked at, so the listing can't grow kandang's
+	// memory or the response.
+	d, err := root.Open(".")
 	if err != nil {
 		return nil, nil, err
+	}
+	entries, err := d.ReadDir(MaxOutputScan + 1)
+	d.Close()
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, nil, err
+	}
+	tooMany := len(entries) > MaxOutputScan
+	if tooMany {
+		entries = entries[:MaxOutputScan]
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 
@@ -192,6 +207,12 @@ func CollectOutputs(dir string) ([]File, []Dropped, error) {
 		default:
 			files = append(files, File{Name: name, Data: data})
 		}
+	}
+	if extra := len(dropped) - MaxDroppedListed; extra > 0 {
+		dropped = append(dropped[:MaxDroppedListed], Dropped{Name: "...", Reason: fmt.Sprintf(DropMoreFormat, extra)})
+	}
+	if tooMany {
+		dropped = append(dropped, Dropped{Name: "...", Reason: DropTooManyEntries})
 	}
 	return files, dropped, nil
 }

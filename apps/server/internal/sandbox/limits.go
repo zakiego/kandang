@@ -16,6 +16,8 @@ const (
 
 	MaxOutputFiles     = 10
 	MaxOutputFileBytes = 15 << 20 // 15 MiB per output file
+	MaxOutputScan      = 1000     // entries of /work/out kandang looks at
+	MaxDroppedListed   = 100      // dropped outputs named in a result
 
 	MaxStreamBytes = 32 << 10 // stdout and stderr, each
 

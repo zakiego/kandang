@@ -203,3 +203,39 @@ func TestCollectOutputsRaces(t *testing.T) {
 		}
 	})
 }
+
+// The code in the sandbox decides how many entries /work/out has. A run that
+// leaves thousands must not turn into a listing of thousands.
+func TestCollectOutputsManyEntries(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out")
+	os.Mkdir(out, 0o755)
+	for i := range MaxOutputScan + 500 {
+		if err := os.Mkdir(filepath.Join(out, fmt.Sprintf("d%05d", i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, dropped, err := CollectOutputs(dir)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("files=%d err=%v", len(files), err)
+	}
+	if len(dropped) != MaxDroppedListed+2 {
+		t.Fatalf("dropped has %d entries, want %d named and two notes", len(dropped), MaxDroppedListed)
+	}
+	more, scan := dropped[MaxDroppedListed], dropped[MaxDroppedListed+1]
+	if more.Reason != fmt.Sprintf(DropMoreFormat, MaxOutputScan-MaxDroppedListed) || scan.Reason != DropTooManyEntries {
+		t.Errorf("notes = %+v, %+v", more, scan)
+	}
+
+	// Exactly at the scan limit nothing is cut.
+	dir2 := t.TempDir()
+	os.Mkdir(filepath.Join(dir2, "out"), 0o755)
+	for i := range MaxDroppedListed {
+		os.Mkdir(filepath.Join(dir2, "out", fmt.Sprintf("d%03d", i)), 0o755)
+	}
+	os.WriteFile(filepath.Join(dir2, "out", "a.txt"), []byte("kept"), 0o644)
+	files, dropped, err = CollectOutputs(dir2)
+	if err != nil || len(files) != 1 || len(dropped) != MaxDroppedListed {
+		t.Errorf("files=%d dropped=%d err=%v", len(files), len(dropped), err)
+	}
+}
