@@ -1,0 +1,74 @@
+---
+title: Self-hosting
+description: Run Kandang on a Linux host with gVisor, or in an isolated OrbStack machine on a Mac.
+---
+
+Kandang is one Go binary, `kandang`, that drives `runsc` directly. There's no Docker on the run path and no Docker socket anywhere. It runs on any Linux host with gVisor and cgroup v2. On a Mac it runs inside an isolated OrbStack machine that can't see the Mac's files.
+
+## Commands
+
+```bash
+kandang serve     # start the HTTP server
+kandang check     # verify runsc, cgroup v2, the rootfs and the token file (writes nothing)
+kandang version   # print the version
+```
+
+## Settings
+
+Every setting is a flag or an environment variable, and flags win. `kandang serve -h` lists them all.
+
+| Flag | Env | Default |
+| --- | --- | --- |
+| `-listen` | `KANDANG_LISTEN` | `:8080` |
+| `-token-file` | `KANDANG_TOKEN_FILE` | `/etc/kandang/token` |
+| `-rootfs` | `KANDANG_ROOTFS` | `/var/lib/kandang/rootfs` |
+| `-state-dir` | `KANDANG_STATE_DIR` | `/var/lib/kandang/state` |
+| `-cgroup-root` | `KANDANG_CGROUP_ROOT` | `/sys/fs/cgroup` |
+| `-max-running` | `KANDANG_MAX_RUNNING` | `2` |
+| `-max-waiting` | `KANDANG_MAX_WAITING` | `10` |
+
+The systemd unit reads overrides from `/etc/kandang/kandang.conf`, one `KEY=value` per line, when it exists.
+
+## Deploy on a Mac
+
+Two scripts in `deploy/`, both run from the Mac:
+
+<Steps>
+<Step>
+
+**Create the machine.**
+
+```bash
+deploy/machine-setup.sh [machine]
+```
+
+It creates an isolated OrbStack machine (Debian 13, 3 GB, 2 CPUs) or brings an existing one up to date. Inside, it installs `runsc` from gVisor's signed apt repo, drops outbound traffic to private and link-local ranges, creates the `kandang` user (uid 10001), generates the bearer token in `/etc/kandang/token` and installs `kandang.service`. It's safe to run again.
+
+</Step>
+<Step>
+
+**Deploy the binary and the image.**
+
+```bash
+deploy/deploy.sh [machine]
+```
+
+It cross-compiles `kandang`, builds the sandbox image, streams it into the machine, swaps the rootfs in one rename (keeping the previous one for a rollback), restarts the service and prints `/health`.
+
+</Step>
+<Step>
+
+**Hand the token to your client.**
+
+```bash
+deploy/show-token.sh [machine]
+```
+
+Run it yourself in a terminal. It's the only thing that ever prints the token.
+
+</Step>
+</Steps>
+
+## Why it runs as root
+
+The service creates cgroups, mounts a tmpfs per run and starts `runsc`, so it runs as root. The systemd unit adds the hardening that doesn't break `runsc`: `NoNewPrivileges`, `ProtectSystem=strict` with only `/var/lib/kandang` and `/sys/fs/cgroup` writable, `PrivateTmp`, `ProtectHome`, kernel module, log and clock protection, and a memory cap for Kandang itself.
