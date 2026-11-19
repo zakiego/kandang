@@ -5,6 +5,8 @@
 package api
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -109,7 +111,8 @@ type InputFile struct {
 	Content string `json:"content"`
 }
 
-// RunResponse is what a finished run returns.
+// RunResponse is what a finished run returns. writeRun produces exactly this
+// shape without ever holding it whole.
 type RunResponse struct {
 	ExitCode        int           `json:"exitCode"`
 	TimedOut        bool          `json:"timedOut"`
@@ -228,7 +231,9 @@ func (s *server) run(w http.ResponseWriter, r *http.Request) {
 		"oom", res.OOMKilled, "ms", res.Duration.Milliseconds(), "peakMb", mb(res.PeakMemoryBytes),
 		"filesIn", len(job.Files), "filesOut", len(res.Files), "dropped", len(res.Dropped),
 		"wallMs", time.Since(start).Milliseconds())
-	writeJSON(w, http.StatusOK, toResponse(res))
+	if err := writeRun(w, res); err != nil {
+		s.opt.Log.Info("run response not delivered", "run", job.ID, "err", err)
+	}
 }
 
 // ValidateRun checks a request and turns it into a job (without an id).
@@ -299,8 +304,27 @@ func ValidateRun(req RunRequest, l sandbox.Limits) (sandbox.Job, *apiError) {
 	return job, nil
 }
 
-func toResponse(res sandbox.Result) RunResponse {
-	out := RunResponse{
+// runHead is a run's response without its files: the part that is small.
+type runHead struct {
+	ExitCode        int     `json:"exitCode"`
+	TimedOut        bool    `json:"timedOut"`
+	DurationMs      int64   `json:"durationMs"`
+	PeakMemoryMb    float64 `json:"peakMemoryMb"`
+	Stdout          string  `json:"stdout"`
+	Stderr          string  `json:"stderr"`
+	StdoutTruncated bool    `json:"stdoutTruncated"`
+	StderrTruncated bool    `json:"stderrTruncated"`
+}
+
+// writeRun streams a RunResponse. A run can return 150 MiB of files, and the
+// code inside the sandbox decides that. Building the JSON in memory held it
+// three times over (the data, its base64 and the encoder's buffer), enough
+// for one run to push kandang past its memory cap. Each file is encoded
+// straight to the client instead and let go once it is out.
+//
+// It takes res.Files over: their data is released as it is written.
+func writeRun(w http.ResponseWriter, res sandbox.Result) error {
+	head, err := marshal(runHead{
 		ExitCode:        res.ExitCode,
 		TimedOut:        res.TimedOut,
 		DurationMs:      res.Duration.Milliseconds(),
@@ -309,15 +333,62 @@ func toResponse(res sandbox.Result) RunResponse {
 		Stderr:          string(res.Stderr.Data),
 		StdoutTruncated: res.Stdout.Truncated,
 		StderrTruncated: res.Stderr.Truncated,
-		Files:           []OutputFile{},
+	})
+	if err != nil {
+		return err
 	}
-	for _, f := range res.Files {
-		out.Files = append(out.Files, OutputFile{Name: f.Name, Size: len(f.Data), Content: base64.StdEncoding.EncodeToString(f.Data)})
+	var dropped []byte
+	if len(res.Dropped) > 0 {
+		list := make([]DroppedFile, 0, len(res.Dropped))
+		for _, d := range res.Dropped {
+			list = append(list, DroppedFile{Name: d.Name, Reason: d.Reason})
+		}
+		if dropped, err = marshal(list); err != nil {
+			return err
+		}
 	}
-	for _, d := range res.Dropped {
-		out.FilesDropped = append(out.FilesDropped, DroppedFile{Name: d.Name, Reason: d.Reason})
+	setJSONHeaders(w)
+	w.WriteHeader(http.StatusOK)
+	bw := bufio.NewWriterSize(w, 64<<10)
+	bw.Write(head[:len(head)-1]) // without its closing brace
+	bw.WriteString(`,"files":[`)
+	for i := range res.Files {
+		f := &res.Files[i]
+		name, err := marshal(f.Name)
+		if err != nil {
+			return err
+		}
+		if i > 0 {
+			bw.WriteByte(',')
+		}
+		fmt.Fprintf(bw, `{"name":%s,"size":%d,"content":"`, name, len(f.Data))
+		enc := base64.NewEncoder(base64.StdEncoding, bw)
+		enc.Write(f.Data)
+		enc.Close()
+		bw.WriteString(`"}`)
+		f.Data = nil
+		if err := bw.Flush(); err != nil {
+			return err // the client went away; stop encoding for nobody
+		}
 	}
-	return out
+	bw.WriteByte(']')
+	if dropped != nil {
+		bw.WriteString(`,"filesDropped":`)
+		bw.Write(dropped)
+	}
+	bw.WriteString("}\n")
+	return bw.Flush()
+}
+
+// marshal is json.Marshal without HTML escaping and without the newline.
+func marshal(v any) ([]byte, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(b.Bytes(), []byte("\n")), nil
 }
 
 // mb is bytes in MiB, rounded to one decimal.
@@ -325,10 +396,14 @@ func mb(b int64) float64 {
 	return math.Round(float64(b)/(1<<20)*10) / 10
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func setJSONHeaders(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	setJSONHeaders(w)
 	w.WriteHeader(status)
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -384,6 +385,96 @@ func TestNotFound(t *testing.T) {
 		w := do(h, p.m, p.path, testToken, nil)
 		if w.Code != 404 && w.Code != 405 {
 			t.Errorf("%s %s = %d", p.m, p.path, w.Code)
+		}
+	}
+}
+
+func TestRunResponseShape(t *testing.T) {
+	big := bytes.Repeat([]byte("kandang"), 100000)
+	res := sandbox.Result{
+		ExitCode: 3, TimedOut: true, Duration: 1500 * time.Millisecond, PeakMemoryBytes: 10 << 20,
+		Stdout: sandbox.Output{Data: []byte("a<b>&\"q\"\n")},
+		Stderr: sandbox.Output{Data: []byte("warn\n"), Truncated: true},
+		Files: []sandbox.File{
+			{Name: `we"ird <name>.txt`, Data: []byte{0, 1, 2, 255}},
+			{Name: "empty", Data: nil},
+			{Name: "big.bin", Data: bytes.Clone(big)},
+		},
+		Dropped: []sandbox.Dropped{{Name: "sub", Reason: sandbox.DropDirectory}},
+	}
+	w := httptest.NewRecorder()
+	if err := writeRun(w, res); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || w.Header().Get("Content-Type") != "application/json" || w.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("status %d, headers %v", w.Code, w.Header())
+	}
+	if !strings.Contains(w.Body.String(), `"stdout":"a<b>&\"q\"\n"`) {
+		t.Errorf("stdout should not be HTML-escaped: %.200s", w.Body)
+	}
+	var got RunResponse
+	dec := json.NewDecoder(w.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&got); err != nil {
+		t.Fatalf("the streamed response isn't a RunResponse: %v", err)
+	}
+	if got.ExitCode != 3 || !got.TimedOut || got.DurationMs != 1500 || got.PeakMemoryMb != 10 ||
+		got.Stdout != "a<b>&\"q\"\n" || got.Stderr != "warn\n" || got.StdoutTruncated || !got.StderrTruncated {
+		t.Errorf("head = %+v", got)
+	}
+	want := []struct {
+		name string
+		data []byte
+	}{{`we"ird <name>.txt`, []byte{0, 1, 2, 255}}, {"empty", nil}, {"big.bin", big}}
+	if len(got.Files) != len(want) {
+		t.Fatalf("files = %d, want %d", len(got.Files), len(want))
+	}
+	for i, wf := range want {
+		data, err := base64.StdEncoding.DecodeString(got.Files[i].Content)
+		if err != nil || got.Files[i].Name != wf.name || got.Files[i].Size != len(wf.data) || !bytes.Equal(data, wf.data) {
+			t.Errorf("files[%d] = %q size %d (%v)", i, got.Files[i].Name, got.Files[i].Size, err)
+		}
+	}
+	if len(got.FilesDropped) != 1 || got.FilesDropped[0] != (DroppedFile{Name: "sub", Reason: sandbox.DropDirectory}) {
+		t.Errorf("filesDropped = %+v", got.FilesDropped)
+	}
+}
+
+// discard keeps nothing, so the test below measures what writing a response
+// allocates, not what a recorder stores.
+type discard struct {
+	h http.Header
+	n int64
+}
+
+func (d *discard) Header() http.Header         { return d.h }
+func (d *discard) WriteHeader(int)             {}
+func (d *discard) Write(p []byte) (int, error) { d.n += int64(len(p)); return len(p), nil }
+
+// The code in the sandbox decides how much comes back, up to 10 files of
+// 15 MiB. Sending that must not cost kandang a second and third copy.
+func TestRunResponseIsStreamed(t *testing.T) {
+	blob := make([]byte, sandbox.MaxOutputFileBytes)
+	res := sandbox.Result{}
+	for i := range sandbox.MaxOutputFiles {
+		res.Files = append(res.Files, sandbox.File{Name: fmt.Sprintf("f%d.bin", i), Data: blob})
+	}
+	d := &discard{h: http.Header{}}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	if err := writeRun(d, res); err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&after)
+	if got := (after.TotalAlloc - before.TotalAlloc) >> 20; got > 8 {
+		t.Errorf("allocated %d MiB to send 150 MiB of files; the response must be streamed", got)
+	}
+	if d.n < 200<<20 {
+		t.Errorf("wrote %d bytes, want the base64 of 150 MiB", d.n)
+	}
+	for _, f := range res.Files {
+		if f.Data != nil {
+			t.Fatalf("%s is still held after it was written", f.Name)
 		}
 	}
 }
