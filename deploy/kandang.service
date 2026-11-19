@@ -14,6 +14,9 @@ Type=simple
 User=root
 ExecStartPre=/opt/kandang/bin/kandang check
 ExecStart=/opt/kandang/bin/kandang serve
+# Go's soft memory limit, under MemoryMax below, so the collector works
+# harder before the kernel has to kill kandang.
+Environment=GOMEMLIMIT=600MiB
 # Optional overrides (KANDANG_LISTEN, KANDANG_MAX_RUNNING, ...), one per line.
 EnvironmentFile=-/etc/kandang/kandang.conf
 Restart=on-failure
