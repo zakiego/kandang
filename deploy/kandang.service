@@ -1,0 +1,42 @@
+[Unit]
+Description=Kandang code sandbox (gVisor)
+Documentation=https://github.com/zakiego/kandang
+After=network-online.target nftables.service
+Wants=network-online.target nftables.service
+
+[Service]
+Type=simple
+# Root is needed: kandang creates cgroups under /sys/fs/cgroup/kandang,
+# mounts a tmpfs per run and starts runsc, which sets up its own namespaces.
+User=root
+ExecStartPre=/opt/kandang/bin/kandang check
+ExecStart=/opt/kandang/bin/kandang serve
+# Optional overrides (KANDANG_LISTEN, KANDANG_MAX_RUNNING, ...), one per line.
+EnvironmentFile=-/etc/kandang/kandang.conf
+Restart=on-failure
+RestartSec=2s
+# SIGTERM cancels the runs in flight; give their cleanup time.
+TimeoutStopSec=30s
+KillMode=mixed
+
+# Hardening that leaves runsc working. Runs live in their own cgroups
+# (outside this unit), so the memory cap below is kandang's own.
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kandang /sys/fs/cgroup
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+MemoryMax=768M
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
