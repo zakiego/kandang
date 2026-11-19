@@ -56,7 +56,8 @@ echo "deploy: streaming the rootfs into $machine (rootfs-$stamp)"
 docker export "$cid" | orb -m "$machine" -u root bash -c "
   set -euo pipefail
   dir=/var/lib/kandang/rootfs-$stamp
-  rm -rf \"\$dir.partial\"
+  # Whatever an interrupted deploy left half unpacked.
+  rm -rf /var/lib/kandang/rootfs-*.partial
   mkdir -p \"\$dir.partial\"
   tar -x --numeric-owner -C \"\$dir.partial\"
   rm -f \"\$dir.partial/.dockerenv\"
@@ -84,7 +85,7 @@ orb -m "$machine" -u root bash -c "
   mv -f /opt/kandang/bin/kandang.new /opt/kandang/bin/kandang
   systemctl restart kandang.service
   # Keep the live rootfs and the one before it; remove older ones.
-  ls -1d rootfs-2*/ 2>/dev/null | sed 's#/\$##' | sort -r | tail -n +3 | while read -r old; do
+  ls -1d rootfs-2*Z/ 2>/dev/null | sed 's#/\$##' | sort -r | tail -n +3 | while read -r old; do
     [ \"\$old\" = rootfs-$stamp ] || rm -rf \"\$old\"
   done
 "
