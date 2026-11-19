@@ -1,6 +1,7 @@
 "use client"
 
-import { useRef } from "react"
+import { Button } from "@ui-sdk/react/button"
+import { useRef, useState } from "react"
 import { useLoopClock } from "@/lib/use-loop-clock"
 
 const CHAR_MS = 55
@@ -25,8 +26,10 @@ export const T = (() => {
   const outStart = c2End + 100
   const out = outStart + 550
   const fade = out + 3200
-  const end = fade + 450
-  return { c0, c0End, inStart, c1, c1End, boot, run, ran, c2, c2End, outStart, out, fade, end }
+  // The stage rewinds to its empty state while hidden, then fades back in.
+  const hidden = fade + 320
+  const end = hidden + 900
+  return { c0, c0End, inStart, c1, c1End, boot, run, ran, c2, c2End, outStart, out, fade, hidden, end }
 })()
 
 type Snap = {
@@ -44,6 +47,11 @@ type Snap = {
 }
 
 export function snapshot(t: number): Snap {
+  if (t >= T.hidden) return { ...frame(0), fading: t < T.end - 300 }
+  return frame(t)
+}
+
+function frame(t: number): Snap {
   const step = t >= T.c2 ? 2 : t >= T.c1 ? 1 : 0
   const startAt = [T.c0, T.c1, T.c2][step]
   const chars = Math.min(CAPTIONS[step].length, Math.floor((t - startAt) / CHAR_MS))
@@ -67,7 +75,8 @@ const same = (a: Snap, b: Snap) =>
 
 export function RunStage() {
   const ref = useRef<HTMLDivElement>(null)
-  const { state: s, reduced } = useLoopClock(ref, T.end, snapshot, same)
+  const [paused, setPaused] = useState(false)
+  const { state: s, reduced } = useLoopClock(ref, T.end, snapshot, same, paused)
   const caption = reduced ? CAPTIONS[2] : CAPTIONS[s.step].slice(0, s.chars)
 
   return (
@@ -78,14 +87,23 @@ export function RunStage() {
     >
       <div aria-hidden="true" className="stage-dots pointer-events-none absolute inset-0" />
       <Corners />
+      {reduced ? null : (
+        <Button
+          aria-label={paused ? "Play demo" : "Pause demo"}
+          onClick={() => setPaused((p) => !p)}
+          className="absolute top-4 right-4 z-10 flex size-6 items-center justify-center rounded-full text-muted transition-[color,background-color,scale] duration-150 ease-[cubic-bezier(.25,.46,.45,.94)] hover:bg-white/[0.08] hover:text-fg active:scale-[0.97] md:top-10 md:right-10"
+        >
+          {paused ? <PlayGlyph /> : <PauseGlyph />}
+        </Button>
+      )}
       <div
         aria-hidden="true"
-        className="relative flex flex-col gap-4 p-5 transition-opacity duration-300 ease-[cubic-bezier(.215,.61,.355,1)] md:gap-6 md:p-10"
-        style={{ opacity: s.fading ? 0 : 1 }}
+        data-fading={s.fading || undefined}
+        className="relative flex flex-col gap-3 p-4 transition-opacity duration-300 ease-[cubic-bezier(.215,.61,.355,1)] data-[fading]:opacity-0 md:gap-6 md:p-10"
       >
-        <div className="flex h-6 items-center gap-3 font-mono text-[12px] text-[#8a8f98]">
-          <span className="text-[#8a8f98] tabular-nums">0{reduced ? 3 : s.step + 1}/03</span>
-          <span className="text-[#d0d6e0]">{caption}</span>
+        <div className="flex h-6 items-center gap-3 font-mono text-[12px] text-muted">
+          <span className="text-muted tabular-nums">0{reduced ? 3 : s.step + 1}/03</span>
+          <span className="text-fg-2">{caption}</span>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)] items-center md:grid-cols-[minmax(0,1fr)_56px_minmax(0,300px)_56px_minmax(0,1fr)] md:gap-0">
           <Request lit={s.reqLit} />
@@ -104,7 +122,7 @@ export function RunStage() {
 }
 
 function Corners() {
-  const c = "absolute size-3 border-[#3e3e44]"
+  const c = "absolute size-3 border-line-3"
   return (
     <div aria-hidden="true" className="pointer-events-none">
       <span className={`${c} top-3 left-3 border-t border-l`} />
@@ -118,23 +136,23 @@ function Corners() {
 function Request({ lit }: { lit: boolean }) {
   return (
     <div
-      className="rounded-xl border bg-[#0f1011] transition-colors duration-300"
-      style={{ borderColor: lit ? "#3e3e44" : "#23252a" }}
+      data-on={lit || undefined}
+      className="rounded-xl border border-line bg-panel transition-colors duration-300 data-[on]:border-line-3"
     >
-      <div className="flex h-10 items-center justify-between border-b border-[#23252a] px-4 font-mono text-[12px]">
-        <span className="text-[#d0d6e0]">POST /v1/runs</span>
-        <span className="text-[#8a8f98]">Bearer ••••</span>
+      <div className="flex h-10 items-center justify-between border-b border-line px-4 font-mono text-[12px]">
+        <span className="text-fg-2">POST /v1/runs</span>
+        <span className="text-muted">Bearer ••••</span>
       </div>
-      <pre className="overflow-hidden px-4 py-3 font-mono text-[11px] leading-[18px] text-[#e2e4e7] md:text-[12px] md:leading-5">
-        <span className="text-[#f79ce0]">import</span> pandas <span className="text-[#f79ce0]">as</span> pd{"\n"}
-        df = pd.read_csv(<span className="text-[#ffdf9f]">&quot;sales.csv&quot;</span>){"\n"}
-        df.plot().figure.savefig(<span className="text-[#ffdf9f]">&quot;chart.png&quot;</span>){"\n"}
-        <span className="text-[#f7bf8b]">print</span>(len(df))
+      <pre className="overflow-hidden px-4 py-3 font-mono text-[11px] leading-[18px] text-syn-text md:text-[12px] md:leading-5">
+        <span className="text-syn-key">import</span> pandas <span className="text-syn-key">as</span> pd{"\n"}
+        df = pd.read_csv(<span className="text-syn-str">&quot;sales.csv&quot;</span>){"\n"}
+        df.plot().figure.savefig(<span className="text-syn-str">&quot;chart.png&quot;</span>){"\n"}
+        <span className="text-syn-fn">print</span>(len(df))
       </pre>
-      <div className="flex items-center gap-2 border-t border-[#23252a] px-4 py-2.5 text-[12px]">
+      <div className="flex items-center gap-2 border-t border-line px-4 py-2.5 text-[12px]">
         <FileGlyph />
-        <span className="font-mono text-[#d0d6e0]">sales.csv</span>
-        <span className="text-[#8a8f98]">500,000 rows</span>
+        <span className="font-mono text-fg-2">sales.csv</span>
+        <span className="text-muted">500,000 rows</span>
       </div>
     </div>
   )
@@ -143,29 +161,22 @@ function Request({ lit }: { lit: boolean }) {
 function Wire({ on }: { on: boolean }) {
   return (
     <div className="relative mx-auto h-6 w-px md:h-px md:w-full">
-      <div className="absolute inset-0 bg-[#23252a]" />
+      <div className="absolute inset-0 bg-line" />
       <span className="wire-track" data-on={on || undefined}>
-        <span className="absolute top-0 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f7f8f8] md:top-1/2 md:left-0" />
+        <span className="absolute top-0 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fg md:top-1/2 md:left-0" />
       </span>
     </div>
   )
 }
 
 function Pen({ s }: { s: Snap }) {
-  const wall = s.boxOn ? "#62666d" : "#34343a"
   return (
-    <div className="relative mx-auto w-full py-5 md:max-w-[300px] md:py-6">
+    <div data-on={s.boxOn || undefined} className="group relative mx-auto w-full py-5 md:max-w-[300px] md:py-6">
       <WallTag className="top-0 left-1/2 -translate-x-1/2">no network</WallTag>
       <WallTag className="bottom-0 left-1/2 -translate-x-1/2">read-only root</WallTag>
-      <div
-        className="rounded-xl border p-1.5 transition-colors duration-300"
-        style={{ borderColor: wall }}
-      >
-        <div
-          className="flex aspect-[16/9] flex-col justify-between rounded-lg border bg-[#0b0c0d] p-3 transition-colors duration-300 md:aspect-[5/4] md:p-4"
-          style={{ borderColor: s.boxOn ? "#34343a" : "#1c1c1f" }}
-        >
-          <div className="flex items-center justify-between font-mono text-[11px] text-[#8a8f98]">
+      <div className="rounded-2xl border border-line-2 p-1.5 transition-colors duration-300 group-data-[on]:border-faint">
+        <div className="flex aspect-[16/9] flex-col justify-between rounded-lg border border-code bg-well p-3 transition-colors duration-300 group-data-[on]:border-line-2 md:aspect-[5/4] md:p-4">
+          <div className="flex items-center justify-between font-mono text-[11px] text-muted">
             <span>gVisor sandbox</span>
             <span>1 GB cap</span>
           </div>
@@ -180,10 +191,10 @@ function Pen({ s }: { s: Snap }) {
           </div>
           <div className="flex items-center gap-2 text-[12px]">
             <span
-              className="size-2 rounded-full transition-colors duration-300"
-              style={{ background: s.ran ? "#27a644" : s.boxOn ? "#f0bf00" : "#3e3e44" }}
+              data-state={s.ran ? "done" : s.boxOn ? "busy" : "idle"}
+              className="size-2 rounded-full bg-line-3 transition-colors duration-300 data-[state=busy]:bg-busy data-[state=done]:bg-ok"
             />
-            <span className="text-[#8a8f98]">
+            <span className="text-muted">
               {s.ran ? "exit 0, sandbox gone" : s.boxOn ? "running" : "waiting"}
             </span>
           </div>
@@ -196,11 +207,11 @@ function Pen({ s }: { s: Snap }) {
 function Row({ show, label, value }: { show: boolean; label: string; value: string }) {
   return (
     <div
-      className="flex items-center justify-between transition-[opacity,translate] duration-300 ease-[cubic-bezier(.215,.61,.355,1)]"
-      style={{ opacity: show ? 1 : 0, translate: show ? "0 0" : "0 4px" }}
+      data-on={show || undefined}
+      className="flex translate-y-1 items-center justify-between opacity-0 transition-[opacity,translate] duration-300 ease-[cubic-bezier(.215,.61,.355,1)] data-[on]:translate-y-0 data-[on]:opacity-100"
     >
-      <span className="text-[#8a8f98]">{label}</span>
-      <span className="text-[#f7f8f8] tabular-nums">{value}</span>
+      <span className="text-muted">{label}</span>
+      <span className="text-fg tabular-nums">{value}</span>
     </div>
   )
 }
@@ -208,7 +219,7 @@ function Row({ show, label, value }: { show: boolean; label: string; value: stri
 function WallTag({ className, children }: { className: string; children: React.ReactNode }) {
   return (
     <span
-      className={`absolute z-10 bg-[#08090a] px-2 font-mono text-[10px] leading-5 tracking-wide text-[#8a8f98] uppercase ${className}`}
+      className={`absolute z-10 bg-ink px-2 font-mono text-[10px] leading-5 tracking-wide text-muted uppercase ${className}`}
     >
       {children}
     </span>
@@ -218,46 +229,55 @@ function WallTag({ className, children }: { className: string; children: React.R
 const BARS = [38, 52, 44, 61, 57, 72, 66, 80, 74, 88, 83, 96]
 
 function Outputs({ n }: { n: number }) {
-  const item = (i: number) => ({
-    opacity: n > i ? 1 : 0,
-    translate: n > i ? "0 0" : "0 6px",
-  })
-  const fx = "transition-[opacity,translate] duration-300 ease-[cubic-bezier(.215,.61,.355,1)]"
+  const fx =
+    "translate-y-1.5 opacity-0 transition-[opacity,translate] duration-300 ease-[cubic-bezier(.215,.61,.355,1)] data-[on]:translate-y-0 data-[on]:opacity-100"
   return (
     <div className="flex flex-col gap-2">
-      <div className={`rounded-xl border border-[#23252a] bg-[#0f1011] p-3 ${fx}`} style={item(0)}>
-        <div className="flex h-16 items-end gap-1 px-1 md:h-28">
+      <div data-on={n > 0 || undefined} className={`group rounded-xl border border-line bg-panel p-3 ${fx}`}>
+        <div className="flex h-12 items-end gap-1 px-1 md:h-28">
           {BARS.map((h, i) => (
             <span
               key={i}
-              className="flex-1 origin-bottom rounded-t-[2px] bg-[#d0d6e0] transition-transform duration-500 ease-[cubic-bezier(.215,.61,.355,1)]"
-              style={{
-                height: `${h}%`,
-                scale: n > 0 ? "1 1" : "1 0",
-                transitionDelay: `${i * 25}ms`,
-              }}
+              className="flex-1 origin-bottom scale-y-0 rounded-t-[2px] bg-fg-2 transition-[scale] duration-500 ease-[cubic-bezier(.215,.61,.355,1)] group-data-[on]:scale-y-100"
+              style={{ height: `${h}%`, transitionDelay: `${i * 25}ms` }}
             />
           ))}
         </div>
         <div className="mt-2.5 flex items-center gap-2 text-[12px]">
           <FileGlyph />
-          <span className="font-mono text-[#d0d6e0]">chart.png</span>
+          <span className="font-mono text-fg-2">chart.png</span>
         </div>
       </div>
       <div
-        className={`flex items-center gap-2 rounded-xl border border-[#23252a] bg-[#0f1011] px-3 py-2.5 font-mono text-[12px] ${fx}`}
-        style={item(1)}
+        data-on={n > 1 || undefined}
+        className={`flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2.5 font-mono text-[12px] ${fx}`}
       >
-        <span className="text-[#8a8f98]">stdout</span>
-        <span className="text-[#d0d6e0] tabular-nums">500000</span>
+        <span className="text-muted">stdout</span>
+        <span className="text-fg-2 tabular-nums">500000</span>
       </div>
     </div>
   )
 }
 
+function PauseGlyph() {
+  return (
+    <svg viewBox="0 0 256 256" className="size-3" fill="currentColor" aria-hidden="true">
+      <path d="M216 48v160a16 16 0 0 1-16 16h-40a16 16 0 0 1-16-16V48a16 16 0 0 1 16-16h40a16 16 0 0 1 16 16zM96 32H56a16 16 0 0 0-16 16v160a16 16 0 0 0 16 16h40a16 16 0 0 0 16-16V48a16 16 0 0 0-16-16z" />
+    </svg>
+  )
+}
+
+function PlayGlyph() {
+  return (
+    <svg viewBox="0 0 256 256" className="size-3" fill="currentColor" aria-hidden="true">
+      <path d="M240 128a15.74 15.74 0 0 1-7.6 13.51L88.32 229.65a16 16 0 0 1-16.2.3A15.86 15.86 0 0 1 64 216.13V39.87a15.86 15.86 0 0 1 8.12-13.82 16 16 0 0 1 16.2.3l144.08 88.14A15.74 15.74 0 0 1 240 128z" />
+    </svg>
+  )
+}
+
 function FileGlyph() {
   return (
-    <svg viewBox="0 0 256 256" className="size-4 shrink-0 text-[#8a8f98]" fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 256 256" className="size-4 shrink-0 text-muted" fill="currentColor" aria-hidden="true">
       <path d="M213.66 82.34l-56-56A8 8 0 0 0 152 24H56a16 16 0 0 0-16 16v176a16 16 0 0 0 16 16h144a16 16 0 0 0 16-16V88a8 8 0 0 0-2.34-5.66zM160 51.31L188.69 80H160zM200 216H56V40h88v48a8 8 0 0 0 8 8h48z" />
     </svg>
   )

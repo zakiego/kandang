@@ -10,11 +10,13 @@ export function useLoopClock<T>(
   length: number,
   snapshot: (t: number) => T,
   same: (a: T, b: T) => boolean,
+  paused = false,
 ): { state: T; reduced: boolean } {
   const [state, setState] = useState<T>(() => snapshot(0))
   const [reduced, setReduced] = useState(false)
   const snap = useRef(snapshot)
   snap.current = snapshot
+  const elapsed = useRef(0)
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)")
@@ -24,16 +26,17 @@ export function useLoopClock<T>(
       return
     }
 
+    if (paused) return
+
     let raf = 0
-    let elapsed = 0
     let last: number | null = null
     let visible = true
-    let current = snap.current(0)
+    let current = snap.current(elapsed.current)
 
     const tick = (now: number) => {
-      if (last !== null) elapsed = (elapsed + now - last) % length
+      if (last !== null) elapsed.current = (elapsed.current + now - last) % length
       last = now
-      const next = snap.current(elapsed)
+      const next = snap.current(elapsed.current)
       if (!same(current, next)) {
         current = next
         setState(next)
@@ -66,7 +69,7 @@ export function useLoopClock<T>(
       observer.disconnect()
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [ref, length, same])
+  }, [ref, length, same, paused])
 
   return { state, reduced }
 }
