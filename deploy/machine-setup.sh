@@ -31,6 +31,17 @@ esac
 command -v orb >/dev/null || { echo "machine-setup: orb (OrbStack) not found" >&2; exit 1; }
 
 if orb info "$machine" >/dev/null 2>&1; then
+  # An existing machine is only reused when it is isolated. A machine made by
+  # hand without the flags mounts the Mac home folder and can reach the other
+  # machines, and everything below would set Kandang up in it anyway.
+  info="$(orb info "$machine" --format json)"
+  for flag in isolated isolate_network; do
+    if ! grep -Eq "\"$flag\": *true" <<<"$info"; then
+      echo "machine-setup: machine $machine exists but isn't isolated ($flag is off)." >&2
+      echo "machine-setup: delete it or pick another name; Kandang only runs in an isolated machine." >&2
+      exit 1
+    fi
+  done
   echo "machine-setup: machine $machine exists, updating it"
   orb start "$machine" >/dev/null 2>&1 || true
 else
