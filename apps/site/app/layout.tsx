@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
+import { Provider } from "@/components/docs/provider"
 import { site } from "@/lib/site"
 import "./globals.css"
 
@@ -31,8 +32,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
-      <body className="bg-ink text-fg">{children}</body>
+    <html lang="en" className={`dark ${inter.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+      <body className="flex min-h-dvh flex-col bg-ink text-fg">
+        <Provider>{children}</Provider>
+      </body>
     </html>
   )
 }

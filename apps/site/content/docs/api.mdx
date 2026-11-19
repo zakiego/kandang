@@ -1,0 +1,102 @@
+---
+title: API
+description: One endpoint to run code, and one to check health.
+---
+
+Kandang has two endpoints and no others.
+
+## Authentication
+
+`POST /v1/runs` needs a bearer token:
+
+```http
+Authorization: Bearer <token>
+```
+
+The server reads the token from its token file at start and compares it in constant time. `GET /health` needs no token.
+
+## Run code
+
+```http
+POST /v1/runs
+```
+
+```json
+{
+  "language": "python",
+  "code": "import pandas as pd\ndf = pd.read_csv('/work/in/sales.csv')\ndf.describe().to_excel('/work/out/summary.xlsx')\nprint(len(df))",
+  "files": [{ "name": "sales.csv", "content": "<base64>" }],
+  "timeoutSec": 60
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `language` | `"python"` or `"bash"` | The code is saved as `/work/main.py` or `/work/main.sh` and run with `python3` or `bash`, with `/work` as the working directory. |
+| `code` | string | Up to 100 KB. |
+| `files` | array, optional | Each item is `{ "name", "content" }`, with the content base64 encoded. Files land in `/work/in`. |
+| `timeoutSec` | number, optional | 60 by default, 300 at most. |
+
+File names are cut to their basename. Empty names, `..`, control characters and names over 128 bytes are rejected.
+
+### Response
+
+When the run happened, the answer is 200 whatever the exit code:
+
+```json
+{
+  "exitCode": 0,
+  "timedOut": false,
+  "durationMs": 3294,
+  "peakMemoryMb": 194.1,
+  "stdout": "500000\n",
+  "stderr": "",
+  "stdoutTruncated": false,
+  "stderrTruncated": false,
+  "files": [{ "name": "summary.xlsx", "size": 12479, "content": "<base64>" }],
+  "filesDropped": [
+    { "name": "plots", "reason": "a directory; only top-level files in /work/out come back" }
+  ]
+}
+```
+
+- `files` holds the top-level regular files the code left in `/work/out`, base64 encoded.
+- `filesDropped` lists what didn't come back (directories, symlinks, anything over the limits) with a reason.
+- A run that hits its timeout has `timedOut: true` and exit code 124.
+- A run killed for going over its memory has exit code 137, with a note at the end of `stderr`.
+- stdout and stderr keep their first and last bytes, with a marker in the middle that says how much was cut.
+
+## Health
+
+```http
+GET /health
+```
+
+200 when runs can start, 503 when `runsc` or the rootfs is missing.
+
+```json
+{
+  "ok": true,
+  "version": "v0.1.0",
+  "runsc": "release-20261116.0",
+  "rootfs": "ok",
+  "queue": { "running": 0, "waiting": 0 }
+}
+```
+
+## Errors
+
+Errors have one shape:
+
+```json
+{ "error": "<code>", "message": "..." }
+```
+
+| Status | Codes |
+| --- | --- |
+| 400 | `invalid_json`, `invalid_language`, `invalid_code`, `invalid_timeout`, `invalid_file`, `too_many_files` |
+| 401 | `unauthorized` |
+| 413 | `body_too_large`, `code_too_large`, `file_too_large`, `files_too_large` |
+| 429 | `busy`, with a `Retry-After` header |
+| 500 | `internal`. The message carries the run id, and the details stay in the server log. |
+| 503 | `not_ready` |

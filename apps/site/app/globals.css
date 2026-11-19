@@ -1,5 +1,38 @@
 @layer ui-sdk;
 @import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+/* The docs use the landing's palette. The site is dark only. */
+:root,
+.dark {
+  --color-fd-background: #08090a;
+  --color-fd-foreground: #f7f8f8;
+  --color-fd-muted: #0f1011;
+  --color-fd-muted-foreground: #8a8f98;
+  --color-fd-popover: #0f1011;
+  --color-fd-popover-foreground: #f7f8f8;
+  --color-fd-card: #0f1011;
+  --color-fd-card-foreground: #f7f8f8;
+  --color-fd-border: #23252a;
+  --color-fd-primary: #f7f8f8;
+  --color-fd-primary-foreground: #08090a;
+  --color-fd-secondary: #141516;
+  --color-fd-secondary-foreground: #f7f8f8;
+  --color-fd-accent: #191a1b;
+  --color-fd-accent-foreground: #f7f8f8;
+  --color-fd-ring: #5e6ad2;
+}
+
+/* Long code lines wrap instead of scrolling the block sideways. */
+.prose pre,
+.prose pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.prose pre {
+  width: 100%;
+}
 
 @theme {
   --color-ink: #08090a;

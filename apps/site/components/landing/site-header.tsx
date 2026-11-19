@@ -11,10 +11,10 @@ export function SiteHeader() {
         </a>
         <nav aria-label="Main">
           <Button
-            render={<a href="#api" />}
+            render={<a href="/docs" />}
             className="flex h-8 items-center rounded-full px-3 text-[13px] text-muted transition-[color,background-color,scale] duration-100 hover:bg-white/[0.08] hover:text-fg active:scale-[0.97]"
           >
-            API
+            Docs
           </Button>
         </nav>
       </div>

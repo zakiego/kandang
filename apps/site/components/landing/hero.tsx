@@ -15,10 +15,10 @@ export function Hero() {
         Your agent sends code and files, and gets the output back.
       </p>
       <Button
-        render={<a href="#api" />}
+        render={<a href="/docs" />}
         className="enter mt-8 inline-flex h-8 items-center rounded-full bg-invert px-3 text-[13px] font-[510] text-ink shadow-[0_3px_2px_#0000000a,0_1px_1px_#00000012,0_0_1px_#00000014] transition-[background-color,scale] duration-150 ease-[cubic-bezier(.25,.46,.45,.94)] [--delay:260ms] hover:bg-white active:scale-[0.97]"
       >
-        See the API&nbsp;→
+        Read the docs&nbsp;→
       </Button>
       <RunStage />
     </section>

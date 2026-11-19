@@ -1,0 +1,43 @@
+---
+title: Overview
+description: Run untrusted Python or bash for your agent in a fresh gVisor sandbox.
+---
+
+Kandang is a throwaway Linux box for AI agents. Your agent sends code and input files, Kandang runs them in a fresh sandbox, and sends back stdout, stderr and the files the code wrote. The sandbox is gone when the run ends.
+
+It never holds a secret. Anything that needs an API key stays in your agent, which fetches the data first and passes it in as a file.
+
+## How a run works
+
+<Steps>
+<Step>
+
+**Your agent sends a request.** `POST /v1/runs` with the language, the code and any input files, base64 encoded.
+
+</Step>
+<Step>
+
+**Kandang starts a sandbox.** A gVisor sandbox with no network, a read-only root, a non-root user, no capabilities and its own memory, CPU and process caps.
+
+</Step>
+<Step>
+
+**The code runs in `/work`.** Inputs are in `/work/in`. Anything the code writes to `/work/out` comes back.
+
+</Step>
+<Step>
+
+**Kandang answers and cleans up.** The response has the exit code, stdout, stderr, the output files and the peak memory. Then the sandbox, its cgroup and its files are removed.
+
+</Step>
+</Steps>
+
+## What's in the box
+
+Alpine with bash and Python, plus numpy, pandas, matplotlib, Pillow, openpyxl, pypdf, python-docx and requests. The image is about 170 MB. There's no network, so `pip install` and `requests` calls to the internet don't work inside a run.
+
+## Next
+
+- [API](/docs/api): the one endpoint, its fields and its errors.
+- [Sandbox and limits](/docs/sandbox): what every run gets and where it stops.
+- [Self-hosting](/docs/self-hosting): run Kandang on your own machine.

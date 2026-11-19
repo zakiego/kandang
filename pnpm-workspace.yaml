@@ -1,2 +1,5 @@
 packages:
   - apps/site
+
+allowBuilds:
+  esbuild: true
