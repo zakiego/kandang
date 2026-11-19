@@ -98,7 +98,13 @@ export function Api() {
     <section aria-labelledby="api" className="border-t border-white/[0.08]">
       <div className="mx-auto max-w-[1440px] px-6 py-24 md:px-20 md:py-32">
         <SectionHead id="api" title="One endpoint">
-          Runs as one small Go service on any Linux host with gVisor.
+          Runs as one small Go service on any Linux host with gVisor.{" "}
+          <a
+            href="/docs/api"
+            className="text-fg underline decoration-faint underline-offset-[0.2em] transition-[text-decoration-color] duration-250 hover:decoration-fg"
+          >
+            API reference
+          </a>
         </SectionHead>
         <div className="mt-12 grid gap-10 md:mt-20 lg:grid-cols-2 lg:gap-16">
           <pre className="min-w-0 rounded-lg border border-white/5 bg-code px-4 py-4 font-mono text-[13px] leading-[21px] break-words whitespace-pre-wrap text-syn-text">
