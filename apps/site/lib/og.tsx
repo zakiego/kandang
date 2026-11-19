@@ -60,14 +60,14 @@ export function ogImage() {
             {walls.map((w) => (
               <div
                 key={w}
-                style={{ display: "flex", fontSize: 30, color: "#d0d6e0", border: "1px solid #34343a", borderRadius: 999, padding: "8px 22px" }}
+                style={{ display: "flex", fontSize: 32, color: "#d0d6e0", border: "1px solid #34343a", borderRadius: 999, padding: "8px 22px" }}
               >
                 {w}
               </div>
             ))}
           </div>
         </div>
-        <div style={{ display: "flex", fontSize: 30, color: "#8a8f98" }}>kandang.zakiego.com</div>
+        <div style={{ display: "flex", fontSize: 32, color: "#8a8f98" }}>kandang.zakiego.com</div>
       </div>
     ),
     ogSize,

@@ -32,7 +32,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
-      <body className="bg-[#08090a] text-[#f7f8f8]">{children}</body>
+      <body className="bg-ink text-fg">{children}</body>
     </html>
   )
 }

@@ -33,7 +33,7 @@ function SectionHead({ id, title, children }: { id?: string; title: string; chil
         {title}
       </h2>
       {children ? (
-        <p className="max-w-[520px] text-[15px] leading-6 text-[#8a8f98] md:pt-2 md:text-[17px] md:leading-[27px]">
+        <p className="max-w-[520px] text-[15px] leading-6 text-muted md:pt-2 md:text-[17px] md:leading-[27px]">
           {children}
         </p>
       ) : null}
@@ -52,12 +52,12 @@ export function Walls() {
               key={a.try}
               className="grid gap-1 border-t border-white/[0.06] py-4 last:border-b md:grid-cols-2 md:gap-8 md:py-5"
             >
-              <span className="text-[15px] font-[510] text-[#f7f8f8]">{a.try}</span>
-              <span className="font-mono text-[13px] leading-6 text-[#8a8f98]">→ {a.result}</span>
+              <span className="text-[15px] font-[510] text-fg">{a.try}</span>
+              <span className="font-mono text-[13px] leading-6 text-muted">→ {a.result}</span>
             </li>
           ))}
         </ul>
-        <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[12px] text-[#8a8f98]">
+        <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[12px] text-muted">
           {WALLS.map((w) => (
             <li key={w}>{w}</li>
           ))}
@@ -80,10 +80,10 @@ export function Numbers() {
               key={n.label}
               className={`flex flex-col-reverse gap-3 pr-4 ${NUMBER_CELL[i]}`}
             >
-              <dt className="text-[13px] leading-5 text-[#8a8f98] text-pretty">{n.label}</dt>
+              <dt className="text-[13px] leading-5 text-muted text-pretty">{n.label}</dt>
               <dd className="text-[40px] leading-none font-[510] tracking-[-0.022em] tabular-nums md:text-[56px]">
                 {n.value}
-                <span className="ml-1 text-[0.4em] text-[#8a8f98]">{n.unit}</span>
+                <span className="ml-1 text-[0.4em] text-muted">{n.unit}</span>
               </dd>
             </div>
           ))}
@@ -101,26 +101,26 @@ export function Api() {
           Runs as one small Go service on any Linux host with gVisor.
         </SectionHead>
         <div className="mt-12 grid gap-10 md:mt-20 lg:grid-cols-2 lg:gap-16">
-          <pre className="min-w-0 rounded-lg border border-white/5 bg-[#1c1c1f] px-4 py-4 font-mono text-[13px] leading-[21px] break-words whitespace-pre-wrap text-[#e2e4e7]">
-            <span className="text-[#f79ce0]">POST</span> /v1/runs{"\n"}
-            <span className="text-[#83dcdc]">Authorization</span>: Bearer <span className="text-[#8a8f98]">&lt;token&gt;</span>
+          <pre className="min-w-0 rounded-lg border border-white/5 bg-code px-4 py-4 font-mono text-[13px] leading-[21px] break-words whitespace-pre-wrap text-syn-text">
+            <span className="text-syn-key">POST</span> /v1/runs{"\n"}
+            <span className="text-syn-type">Authorization</span>: Bearer <span className="text-muted">&lt;token&gt;</span>
           </pre>
           <dl className="grid grid-cols-2 gap-8 text-[15px] leading-6">
             <div>
-              <dt className="font-mono text-[12px] text-[#8a8f98] uppercase">In</dt>
-              <dd className="mt-3 text-[#d0d6e0]">Python or bash</dd>
-              <dd className="text-[#d0d6e0]">Input files</dd>
+              <dt className="font-mono text-[12px] text-muted uppercase">In</dt>
+              <dd className="mt-3 text-fg-2">Python or bash</dd>
+              <dd className="text-fg-2">Input files</dd>
             </div>
             <div>
-              <dt className="font-mono text-[12px] text-[#8a8f98] uppercase">Out</dt>
-              <dd className="mt-3 text-[#d0d6e0]">stdout and stderr</dd>
-              <dd className="text-[#d0d6e0]">Charts, xlsx, pdf, docx, photos</dd>
+              <dt className="font-mono text-[12px] text-muted uppercase">Out</dt>
+              <dd className="mt-3 text-fg-2">stdout and stderr</dd>
+              <dd className="text-fg-2">Charts, xlsx, pdf, docx, photos</dd>
             </div>
           </dl>
         </div>
         <div className="mt-12 border-t border-white/[0.06] pt-6">
-          <p className="font-mono text-[12px] text-[#8a8f98] uppercase">Inside the image · Alpine · about 170 MB</p>
-          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[13px] text-[#8a8f98]">
+          <p className="font-mono text-[12px] text-muted uppercase">Inside the image · Alpine · about 170 MB</p>
+          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[13px] text-muted">
             {PACKAGES.map((p) => (
               <li key={p}>{p}</li>
             ))}
@@ -141,11 +141,11 @@ export function Name() {
         >
           Kandang is Indonesian for a pen
         </h2>
-        <p className="mt-4 text-[15px] leading-6 text-[#8a8f98] md:text-[17px]">
+        <p className="mt-4 text-[15px] leading-6 text-muted md:text-[17px]">
           Built first for{" "}
           <a
             href="https://palui.zakiego.com"
-            className="text-[#f7f8f8] underline decoration-[#62666d] underline-offset-[0.2em] transition-[text-decoration-color] duration-250 hover:decoration-[#f7f8f8]"
+            className="text-fg underline decoration-faint underline-offset-[0.2em] transition-[text-decoration-color] duration-250 hover:decoration-fg"
           >
             Palui
           </a>

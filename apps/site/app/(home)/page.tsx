@@ -20,7 +20,7 @@ export default function Home() {
     <>
       <a
         href="#main"
-        className="sr-only z-30 bg-[#5e6ad2] text-[14px] font-[510] text-white focus:not-sr-only focus:fixed focus:top-0 focus:left-0 focus:flex focus:h-8 focus:w-full focus:items-center focus:justify-center"
+        className="sr-only z-30 bg-accent text-[14px] font-[510] text-white focus:not-sr-only focus:fixed focus:top-0 focus:left-0 focus:flex focus:h-8 focus:w-full focus:items-center focus:justify-center"
       >
         Skip to content
       </a>
