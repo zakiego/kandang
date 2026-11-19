@@ -87,15 +87,23 @@ var ErrUnsupported = errors.New("sandbox: runs need Linux with runsc; this build
 // ErrBadID is returned for a run id that isn't one NewID could have made.
 var ErrBadID = errors.New("sandbox: invalid run id")
 
-var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
+// A run id is also a runsc container id and a command line argument, so it
+// must start with a letter or a digit: runsc would read "-Ab..." as a flag.
+var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{21}$`)
 
-// NewID returns a random, URL-safe run id (16 random bytes, 22 characters).
+// NewID returns a random, URL-safe run id (16 random bytes, 22 characters)
+// that starts with a letter or a digit.
 func NewID() string {
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(err) // crypto/rand never fails on supported platforms
+	for {
+		var b [16]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			panic(err) // crypto/rand never fails on supported platforms
+		}
+		id := base64.RawURLEncoding.EncodeToString(b[:])
+		if id[0] != '-' && id[0] != '_' {
+			return id
+		}
 	}
-	return base64.RawURLEncoding.EncodeToString(b[:])
 }
 
 // ValidID reports whether id is safe to use as a path element.

@@ -52,17 +52,24 @@ func TestCleanName(t *testing.T) {
 
 func TestIDs(t *testing.T) {
 	seen := map[string]bool{}
-	for range 100 {
+	// 1 in 32 raw ids starts with '-' or '_'; 5000 draws would hit one.
+	for range 5000 {
 		id := NewID()
 		if !ValidID(id) {
 			t.Fatalf("NewID() = %q isn't valid", id)
+		}
+		if id[0] == '-' || id[0] == '_' {
+			t.Fatalf("NewID() = %q starts like a command line flag", id)
 		}
 		if seen[id] {
 			t.Fatalf("duplicate id %q", id)
 		}
 		seen[id] = true
 	}
-	for _, id := range []string{"", "short", "../../../../../../etc/x", strings.Repeat("a", 21) + "/", strings.Repeat("a", 21) + "."} {
+	for _, id := range []string{
+		"", "short", "../../../../../../etc/x", strings.Repeat("a", 21) + "/", strings.Repeat("a", 21) + ".",
+		"-" + strings.Repeat("a", 21), "--bundle=" + strings.Repeat("a", 13), "_" + strings.Repeat("a", 21),
+	} {
 		if ValidID(id) {
 			t.Errorf("ValidID(%q) = true", id)
 		}
