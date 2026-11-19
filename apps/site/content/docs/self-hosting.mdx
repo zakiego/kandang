@@ -21,11 +21,17 @@ Every setting is a flag or an environment variable, and flags win. `kandang serv
 | --- | --- | --- |
 | `-listen` | `KANDANG_LISTEN` | `:8080` |
 | `-token-file` | `KANDANG_TOKEN_FILE` | `/etc/kandang/token` |
+| `-runsc` | `KANDANG_RUNSC` | `runsc` |
 | `-rootfs` | `KANDANG_ROOTFS` | `/var/lib/kandang/rootfs` |
 | `-state-dir` | `KANDANG_STATE_DIR` | `/var/lib/kandang/state` |
 | `-cgroup-root` | `KANDANG_CGROUP_ROOT` | `/sys/fs/cgroup` |
 | `-max-running` | `KANDANG_MAX_RUNNING` | `2` |
 | `-max-waiting` | `KANDANG_MAX_WAITING` | `10` |
+| `-memory-mb` | `KANDANG_MEMORY_MB` | `1024` |
+| `-pids` | `KANDANG_PIDS` | `256` |
+| `-procs` | `KANDANG_PROCS` | `64` |
+| `-default-timeout-sec` | `KANDANG_DEFAULT_TIMEOUT_SEC` | `60` |
+| `-max-timeout-sec` | `KANDANG_MAX_TIMEOUT_SEC` | `300` |
 
 The systemd unit reads overrides from `/etc/kandang/kandang.conf`, one `KEY=value` per line, when it exists.
 

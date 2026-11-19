@@ -1,0 +1,22 @@
+# Kandang server settings, one KEY=value per line. Every key is optional; the
+# values below are the defaults. Copy the ones you change into
+# /etc/kandang/kandang.conf (deploy/kandang.service reads it), or export them
+# before `kandang serve`. Flags win over env.
+#
+# There's no token here on purpose: the bearer token lives in its own file
+# (KANDANG_TOKEN_FILE, mode 0600, at least 32 characters) and is never set
+# through the environment.
+
+KANDANG_LISTEN=:8080
+KANDANG_TOKEN_FILE=/etc/kandang/token
+KANDANG_RUNSC=runsc
+KANDANG_ROOTFS=/var/lib/kandang/rootfs
+KANDANG_STATE_DIR=/var/lib/kandang/state
+KANDANG_CGROUP_ROOT=/sys/fs/cgroup
+KANDANG_MAX_RUNNING=2
+KANDANG_MAX_WAITING=10
+KANDANG_MEMORY_MB=1024
+KANDANG_PIDS=256
+KANDANG_PROCS=64
+KANDANG_DEFAULT_TIMEOUT_SEC=60
+KANDANG_MAX_TIMEOUT_SEC=300

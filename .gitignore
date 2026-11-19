@@ -1,9 +1,33 @@
+# Node and the site
 node_modules/
 .next/
 out/
 *.tsbuildinfo
+coverage/
+.vercel/
+.wrangler/
+
+# Go
 /bin/
 /dist/
-.DS_Store
+/apps/server/kandang
+*.test
+*.out
+go.work.sum
+
+# Secrets and local config
 .env*
 !.env.example
+*.pem
+*.key
+*.p12
+token
+kandang.conf
+.claude/settings.local.json
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.log

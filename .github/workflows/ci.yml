@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server (vet, lint, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/server
+    steps:
+      - uses: actions/checkout@v7
+      - id: present
+        working-directory: .
+        run: |
+          if [ -f apps/server/go.mod ]; then echo "yes=true" >> "$GITHUB_OUTPUT"; else echo "yes=false" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.present.outputs.yes == 'true'
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: apps/server/go.mod
+          cache-dependency-path: apps/server/go.mod
+      - name: gofmt
+        if: steps.present.outputs.yes == 'true'
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then echo "Run gofmt on:"; echo "$unformatted"; exit 1; fi
+      - name: go vet
+        if: steps.present.outputs.yes == 'true'
+        run: go vet ./...
+      - name: golangci-lint
+        if: steps.present.outputs.yes == 'true'
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          working-directory: apps/server
+      - name: go test
+        if: steps.present.outputs.yes == 'true'
+        run: go test -race ./...
+      - name: go build
+        if: steps.present.outputs.yes == 'true'
+        run: CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/kandang
+
+  site:
+    name: Site (typecheck, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @kandang/site typecheck
+      - run: pnpm --filter @kandang/site test
+      - run: pnpm --filter @kandang/site build
