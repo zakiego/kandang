@@ -2,7 +2,10 @@
 Description=Kandang code sandbox (gVisor)
 Documentation=https://github.com/zakiego/kandang
 After=network-online.target nftables.service
-Wants=network-online.target nftables.service
+Wants=network-online.target
+# No egress rule, no kandang: if nftables.service fails to load the ruleset
+# (or is stopped), this unit doesn't run.
+Requires=nftables.service
 
 [Service]
 Type=simple

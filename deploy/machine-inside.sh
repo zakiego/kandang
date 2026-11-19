@@ -71,8 +71,10 @@ table inet kandang_egress {
   }
 }
 EOF
+# Check the new file before it replaces the old one: a broken nftables.conf
+# would only show at the next boot, as a machine with no egress rule at all.
+nft -c -f /etc/nftables.conf.new
 mv -f /etc/nftables.conf.new /etc/nftables.conf
-nft -c -f /etc/nftables.conf
 nft -f /etc/nftables.conf
 systemctl enable nftables.service >/dev/null 2>&1
 log "egress rule loaded (private and link-local ranges dropped)"
