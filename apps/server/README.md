@@ -51,7 +51,7 @@ Needs `Authorization: Bearer <token>`. The token is read from the token file at 
 
 - `language` is `python` or `bash`. The code is written to `/work/main.py` or `/work/main.sh` and run with `python3` or `bash`, with `/work` as the working directory.
 - Input files land in `/work/in`. Names are cut to their basename; `..`, empty names, control characters and names over 128 bytes are rejected.
-- Top-level regular files the code leaves in `/work/out` come back. Directories, symlinks and anything over the limits are listed in `filesDropped` with a reason.
+- Top-level regular files the code leaves in `/work/out` come back. Directories, symlinks and anything over the limits are listed in `filesDropped` with a reason. Only the first 1000 entries of `/work/out` are looked at and at most 100 dropped names are listed; a note at the end says how many more there were.
 
 The answer, when the run itself happened (whatever its exit code):
 
@@ -88,9 +88,9 @@ There are no other endpoints.
 | Code | 100 KB |
 | Input files | 20 files, 15 MiB each, 50 MB in total |
 | Request body | about 68 MiB, checked before decoding |
-| Output files | 10 files from `/work/out`, 15 MiB each |
+| Output files | 10 files from `/work/out`, 15 MiB each; 1000 entries looked at, 100 dropped names listed |
 | stdout, stderr | 32 KB each (head and tail) |
-| Timeout | 60 s default, 300 s max |
+| Timeout | 60 s default, 300 s max, 0.001 s min |
 | Memory | 1 GiB, no swap (`memory.max`, `memory.swap.max 0`) |
 | CPU | one CPU (`cpu.max 100000 100000`) |
 | Host pids | 256 (`pids.max`; gVisor's own threads count here too) |
@@ -109,7 +109,7 @@ There are no other endpoints.
 3. It writes the OCI `config.json`: the shared rootfs read-only, tmpfs `/tmp`, the run's dir at `/work`, uid and gid 10001, no capabilities, `noNewPrivileges`, its own pid, network, ipc, uts and mount namespaces, hostname `kandang`.
 4. It creates `/sys/fs/cgroup/kandang/<runID>` with the limits above and starts `runsc --ignore-cgroups --network=none --platform=systrap run` straight into that cgroup (`clone3` with `CLONE_INTO_CGROUP`), so the sandbox and everything it starts is capped from its first instruction.
 5. On timeout it kills the whole cgroup (`cgroup.kill`) and runs `runsc kill`.
-6. It reads `memory.peak`, the OOM count and `/work/out`, then always cleans up: `runsc delete --force`, `cgroup.kill`, rmdir the cgroup, unmount the tmpfs, remove the run dir. Whatever a crash left behind is swept at the next start.
+6. It reads `memory.peak` and the OOM count, kills the cgroup once more and waits until it is empty, and only then reads `/work/out` (through a root at the run's dir, so a symlink can't lead to a host file). The response is streamed, one file at a time. Then it always cleans up: `runsc delete --force`, `cgroup.kill`, rmdir the cgroup, unmount the tmpfs, remove the run dir. Whatever a crash left behind is swept at the next start.
 
 ## Tests
 
@@ -138,9 +138,9 @@ orb delete -f kandang-it
 
 Two scripts in `deploy/`, both run from the Mac:
 
-1. `deploy/machine-setup.sh [machine]` creates the isolated machine (Debian 13, 3 GB, 2 CPUs) or brings an existing one up to date. Inside it installs `runsc` from gVisor's signed apt repo, loads an nftables rule that drops outbound traffic to private and link-local ranges (replies to incoming connections, IPv6 neighbor discovery and DHCP renewals still pass), creates the `kandang` user (uid 10001, the sandbox uid) and the dirs, generates the bearer token in `/etc/kandang/token` (mode 0600, never printed) and installs `kandang.service`. Safe to run again.
+1. `deploy/machine-setup.sh [machine]` creates the isolated machine (Debian 13, 3 GB, 2 CPUs) or brings an existing one up to date (it refuses an existing machine that isn't isolated). Inside it installs `runsc` from gVisor's signed apt repo, loads an nftables rule that drops outbound traffic to private, shared (100.64.0.0/10) and link-local ranges (replies to incoming connections, IPv6 neighbor discovery and DHCP renewals still pass), creates the `kandang` user (uid 10001, the sandbox uid) and the dirs, generates the bearer token in `/etc/kandang/token` (mode 0600, never printed) and installs `kandang.service`. Safe to run again.
 2. `deploy/deploy.sh [machine]` cross-compiles `kandang` for linux/arm64, builds `image/Dockerfile` with the Mac's Docker, exports a container to a tar and streams it into the machine through `orb -u root` (an isolated machine has no file sharing). It unpacks into a new `rootfs-<time>` dir, swaps the `rootfs` symlink in one rename, keeps the previous rootfs for a rollback, replaces the binary, restarts the service and prints `/health`. The image it built is removed afterwards.
 
 To give a client the token, run `deploy/show-token.sh [machine]` yourself in a terminal. It's the only thing that ever prints it.
 
-The service runs as root because it creates cgroups, mounts a tmpfs per run and starts `runsc`. The unit adds what hardening systemd allows without breaking `runsc` (`NoNewPrivileges`, `ProtectSystem=strict` with only `/var/lib/kandang` and `/sys/fs/cgroup` writable, `PrivateTmp`, `ProtectHome`, kernel module, log and clock protection, a memory cap for kandang itself).
+The service runs as root because it creates cgroups, mounts a tmpfs per run and starts `runsc`. The unit adds what hardening systemd allows without breaking `runsc` (`NoNewPrivileges`, `ProtectSystem=strict` with only `/var/lib/kandang/state` and `/sys/fs/cgroup` writable, `PrivateTmp`, `ProtectHome`, kernel module, log and clock protection, a memory cap for kandang itself). It needs `nftables.service`, so it doesn't run without the egress rule, and when it stops it kills any run cgroup that is still alive.
