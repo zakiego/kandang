@@ -29,6 +29,11 @@ import (
 // 6 bytes), and room for names and field syntax.
 const MaxBodyBytes = sandbox.MaxInputBytes/3*4 + sandbox.MaxCodeBytes*6 + 1<<20
 
+// ResponseWriteTimeout is how long a client gets to read a run's response.
+// The run slot is held until then, so a client that stops reading can't keep
+// it forever.
+const ResponseWriteTimeout = 2 * time.Minute
+
 // Options wires the handler to its parts.
 type Options struct {
 	Runner  sandbox.Runner
@@ -231,6 +236,11 @@ func (s *server) run(w http.ResponseWriter, r *http.Request) {
 		"oom", res.OOMKilled, "ms", res.Duration.Milliseconds(), "peakMb", mb(res.PeakMemoryBytes),
 		"filesIn", len(job.Files), "filesOut", len(res.Files), "dropped", len(res.Dropped),
 		"wallMs", time.Since(start).Milliseconds())
+	// The slot is still held here, so the write gets a deadline. It is cleared
+	// after: the connection may be reused for a run that takes longer.
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(ResponseWriteTimeout))
+	defer func() { _ = rc.SetWriteDeadline(time.Time{}) }()
 	if err := writeRun(w, res); err != nil {
 		s.opt.Log.Info("run response not delivered", "run", job.ID, "err", err)
 	}

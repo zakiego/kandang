@@ -478,3 +478,36 @@ func TestRunResponseIsStreamed(t *testing.T) {
 		}
 	}
 }
+
+type deadlineRecorder struct {
+	*httptest.ResponseRecorder
+	deadlines []time.Time
+}
+
+func (d *deadlineRecorder) SetWriteDeadline(t time.Time) error {
+	d.deadlines = append(d.deadlines, t)
+	return nil
+}
+
+// A client that stops reading a response would hold its run slot forever.
+// The write gets a deadline, and the deadline is cleared again so it can't
+// cut off a later, longer run on the same connection.
+func TestRunResponseHasAWriteDeadline(t *testing.T) {
+	h := newTest(t, &fakeRunner{ready: true}, nil)
+	req := httptest.NewRequest("POST", "/v1/runs", strings.NewReader(`{"language":"bash","code":"true"}`))
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	w := &deadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	h.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if len(w.deadlines) != 2 {
+		t.Fatalf("write deadlines set: %v, want one for the write and one to clear it", w.deadlines)
+	}
+	if left := time.Until(w.deadlines[0]); left <= 0 || left > ResponseWriteTimeout {
+		t.Errorf("write deadline is %s away, want within %s", left, ResponseWriteTimeout)
+	}
+	if !w.deadlines[1].IsZero() {
+		t.Errorf("the deadline wasn't cleared after the response: %v", w.deadlines[1])
+	}
+}
