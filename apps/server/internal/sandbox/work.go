@@ -56,7 +56,7 @@ func writeNew(path string, data []byte, chown func(string) error) error {
 		return err
 	}
 	if _, err := f.Write(data); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := f.Close(); err != nil {
@@ -127,7 +127,7 @@ func CollectOutputs(dir string) ([]File, []Dropped, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	defer work.Close()
+	defer func() { _ = work.Close() }()
 	st, err := work.Lstat("out")
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil // the code removed it; nothing to return
@@ -146,7 +146,7 @@ func CollectOutputs(dir string) ([]File, []Dropped, error) {
 		// It was a directory a moment ago: something replaced it.
 		return nil, []Dropped{{Name: "out", Reason: DropOutMissing}}, nil
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	// The sandbox can leave hundreds of thousands of entries here. Only the
 	// first MaxOutputScan are looked at, so the listing can't grow kandang's
 	// memory or the response.
@@ -155,7 +155,7 @@ func CollectOutputs(dir string) ([]File, []Dropped, error) {
 		return nil, nil, err
 	}
 	entries, err := d.ReadDir(MaxOutputScan + 1)
-	d.Close()
+	_ = d.Close()
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, nil, err
 	}
@@ -234,7 +234,7 @@ func readCapped(root *os.Root, name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	st, err := f.Stat()
 	if err != nil {
 		return nil, err

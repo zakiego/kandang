@@ -112,7 +112,9 @@ func TestHealth(t *testing.T) {
 		t.Fatalf("status %d", w.Code)
 	}
 	var h map[string]any
-	json.Unmarshal(w.Body.Bytes(), &h)
+	if err := json.Unmarshal(w.Body.Bytes(), &h); err != nil {
+		t.Fatal(err)
+	}
 	if h["ok"] != true || h["version"] != "v0.1.0-test" || h["runsc"] != "release-20261116.0" || h["rootfs"] != "ok" {
 		t.Errorf("health = %v", h)
 	}
@@ -178,7 +180,9 @@ func TestRunOK(t *testing.T) {
 		t.Fatalf("status %d: %s", w.Code, w.Body)
 	}
 	var res map[string]any
-	json.Unmarshal(w.Body.Bytes(), &res)
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
 	if res["exitCode"] != 0.0 || res["timedOut"] != false || res["durationMs"] != 1234.0 || res["peakMemoryMb"] != 225.0 {
 		t.Errorf("res = %v", res)
 	}

@@ -51,9 +51,9 @@ func TestCgroupSetupAndCreate(t *testing.T) {
 	}
 
 	// The kernel provides these; stand in for it.
-	os.WriteFile(filepath.Join(g.Path, "memory.peak"), []byte("236978176\n"), 0o644)
-	os.WriteFile(filepath.Join(g.Path, "memory.events"), []byte("low 0\nhigh 0\nmax 12\noom 1\noom_kill 1\noom_group_kill 1\n"), 0o644)
-	os.WriteFile(filepath.Join(g.Path, "cgroup.events"), []byte("populated 0\nfrozen 0\n"), 0o644)
+	must(t, os.WriteFile(filepath.Join(g.Path, "memory.peak"), []byte("236978176\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(g.Path, "memory.events"), []byte("low 0\nhigh 0\nmax 12\noom 1\noom_kill 1\noom_group_kill 1\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(g.Path, "cgroup.events"), []byte("populated 0\nfrozen 0\n"), 0o644))
 	if got := g.Peak(); got != 236978176 {
 		t.Errorf("Peak = %d", got)
 	}
@@ -66,12 +66,12 @@ func TestCgroupSetupAndCreate(t *testing.T) {
 	if g.PidsLimited() {
 		t.Error("PidsLimited = true with no pids.events")
 	}
-	os.WriteFile(filepath.Join(g.Path, "pids.events"), []byte("max 3\n"), 0o644)
+	must(t, os.WriteFile(filepath.Join(g.Path, "pids.events"), []byte("max 3\n"), 0o644))
 	if !g.PidsLimited() {
 		t.Error("PidsLimited = false with max 3")
 	}
 
-	os.WriteFile(filepath.Join(g.Path, "cgroup.kill"), nil, 0o644)
+	must(t, os.WriteFile(filepath.Join(g.Path, "cgroup.kill"), nil, 0o644))
 	if err := g.Kill(); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestCgroupSetupAndCreate(t *testing.T) {
 
 func TestCgroupCreateRejectsBadID(t *testing.T) {
 	c := Cgroups{Root: t.TempDir()}
-	c.Setup()
+	must(t, c.Setup())
 	for _, id := range []string{"", "..", "../etc", "a/b", strings.Repeat("a", 23)} {
 		if _, err := c.Create(id, DefaultLimits()); err != ErrBadID {
 			t.Errorf("Create(%q) = %v, want ErrBadID", id, err)
@@ -99,7 +99,7 @@ func TestCgroupRemove(t *testing.T) {
 	// On cgroupfs an rmdir works with the control files still listed; in a
 	// temp dir it fails while files exist, so test both outcomes.
 	c := Cgroups{Root: t.TempDir()}
-	c.Setup()
+	must(t, c.Setup())
 	g, err := c.Create(NewID(), DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
@@ -130,11 +130,11 @@ func TestCgroupCheck(t *testing.T) {
 	if err := c.Check(); err == nil {
 		t.Error("Check with no cgroup.controllers = nil")
 	}
-	os.WriteFile(filepath.Join(root, "cgroup.controllers"), []byte("cpuset cpu io memory\n"), 0o644)
+	must(t, os.WriteFile(filepath.Join(root, "cgroup.controllers"), []byte("cpuset cpu io memory\n"), 0o644))
 	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "pids") {
 		t.Errorf("Check = %v, want pids missing", err)
 	}
-	os.WriteFile(filepath.Join(root, "cgroup.controllers"), []byte("cpuset cpu io memory hugetlb pids rdma misc\n"), 0o644)
+	must(t, os.WriteFile(filepath.Join(root, "cgroup.controllers"), []byte("cpuset cpu io memory hugetlb pids rdma misc\n"), 0o644))
 	if err := c.Check(); err != nil {
 		t.Errorf("Check = %v", err)
 	}
@@ -145,15 +145,15 @@ func TestCgroupCheck(t *testing.T) {
 
 func TestCgroupKillAndWait(t *testing.T) {
 	c := Cgroups{Root: t.TempDir()}
-	c.Setup()
+	must(t, c.Setup())
 	g, err := c.Create(NewID(), DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(filepath.Join(g.Path, "cgroup.kill"), nil, 0o644)
+	must(t, os.WriteFile(filepath.Join(g.Path, "cgroup.kill"), nil, 0o644))
 
 	// Still populated: it must not report the run as gone.
-	os.WriteFile(filepath.Join(g.Path, "cgroup.events"), []byte("populated 1\nfrozen 0\n"), 0o644)
+	must(t, os.WriteFile(filepath.Join(g.Path, "cgroup.events"), []byte("populated 1\nfrozen 0\n"), 0o644))
 	if err := g.KillAndWait(40 * time.Millisecond); err == nil {
 		t.Error("KillAndWait = nil while the cgroup still has processes")
 	}
@@ -164,7 +164,9 @@ func TestCgroupKillAndWait(t *testing.T) {
 	// The processes go away a little later.
 	go func() {
 		time.Sleep(30 * time.Millisecond)
-		os.WriteFile(filepath.Join(g.Path, "cgroup.events"), []byte("populated 0\nfrozen 0\n"), 0o644)
+		if err := os.WriteFile(filepath.Join(g.Path, "cgroup.events"), []byte("populated 0\nfrozen 0\n"), 0o644); err != nil {
+			t.Error(err)
+		}
 	}()
 	if err := g.KillAndWait(2 * time.Second); err != nil {
 		t.Errorf("KillAndWait = %v after the cgroup emptied", err)
@@ -173,5 +175,13 @@ func TestCgroupKillAndWait(t *testing.T) {
 	gone := &Cgroup{Path: filepath.Join(c.Parent(), NewID())}
 	if err := gone.KillAndWait(time.Second); err != nil {
 		t.Errorf("KillAndWait of a missing cgroup = %v", err)
+	}
+}
+
+// must fails the test when a setup step didn't work.
+func must(t testing.TB, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
 	}
 }

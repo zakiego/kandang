@@ -90,7 +90,7 @@ func (c Cgroups) Create(id string, l Limits) (*Cgroup, error) {
 	}
 	for _, w := range writes {
 		if err := writeFile(filepath.Join(g.Path, w.file), w.value); err != nil {
-			os.Remove(g.Path)
+			_ = os.Remove(g.Path)
 			return nil, fmt.Errorf("cgroup: write %s: %w", w.file, err)
 		}
 	}

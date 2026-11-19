@@ -139,6 +139,6 @@ func trimRuneStart(b []byte) []byte {
 // Truncate caps b the same way CapWriter does.
 func Truncate(b []byte, max int) Output {
 	w := NewCapWriter(max)
-	w.Write(b)
+	_, _ = w.Write(b) // a CapWriter never fails
 	return w.Output()
 }

@@ -74,25 +74,33 @@ func TestParseErrors(t *testing.T) {
 func TestReadToken(t *testing.T) {
 	dir := t.TempDir()
 	good := filepath.Join(dir, "token")
-	os.WriteFile(good, []byte(strings.Repeat("k", 43)+"\n"), 0o600)
+	must(t, os.WriteFile(good, []byte(strings.Repeat("k", 43)+"\n"), 0o600))
 	tok, err := ReadToken(good)
 	if err != nil || string(tok) != strings.Repeat("k", 43) {
 		t.Errorf("ReadToken = %q, %v", tok, err)
 	}
 
 	open := filepath.Join(dir, "open")
-	os.WriteFile(open, []byte(strings.Repeat("k", 43)), 0o644)
-	os.Chmod(open, 0o644)
+	must(t, os.WriteFile(open, []byte(strings.Repeat("k", 43)), 0o644))
+	must(t, os.Chmod(open, 0o644))
 	if _, err := ReadToken(open); err == nil || !strings.Contains(err.Error(), "0600") {
 		t.Errorf("world-readable token: %v", err)
 	}
 
 	short := filepath.Join(dir, "short")
-	os.WriteFile(short, []byte("abc"), 0o600)
+	must(t, os.WriteFile(short, []byte("abc"), 0o600))
 	if _, err := ReadToken(short); err == nil {
 		t.Error("short token accepted")
 	}
 	if _, err := ReadToken(filepath.Join(dir, "missing")); err == nil {
 		t.Error("missing token file accepted")
+	}
+}
+
+// must fails the test when a setup step didn't work.
+func must(t testing.TB, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
 	}
 }

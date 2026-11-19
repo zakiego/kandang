@@ -389,9 +389,12 @@ func writeRun(w http.ResponseWriter, res sandbox.Result) error {
 	}
 	setJSONHeaders(w)
 	w.WriteHeader(http.StatusOK)
+	// A bufio.Writer keeps its first error: later writes do nothing and
+	// Flush reports it. So the writes below don't check, the flushes do.
 	bw := bufio.NewWriterSize(w, 64<<10)
-	bw.Write(head[:len(head)-1]) // without its closing brace
-	bw.WriteString(`,"files":[`)
+	put := func(s string) { _, _ = bw.WriteString(s) }
+	_, _ = bw.Write(head[:len(head)-1]) // without its closing brace
+	put(`,"files":[`)
 	for i := range res.Files {
 		f := &res.Files[i]
 		name, err := marshal(f.Name)
@@ -399,24 +402,24 @@ func writeRun(w http.ResponseWriter, res sandbox.Result) error {
 			return err
 		}
 		if i > 0 {
-			bw.WriteByte(',')
+			put(",")
 		}
-		fmt.Fprintf(bw, `{"name":%s,"size":%d,"content":"`, name, len(f.Data))
+		put(fmt.Sprintf(`{"name":%s,"size":%d,"content":"`, name, len(f.Data)))
 		enc := base64.NewEncoder(base64.StdEncoding, bw)
-		enc.Write(f.Data)
-		enc.Close()
-		bw.WriteString(`"}`)
+		_, _ = enc.Write(f.Data)
+		_ = enc.Close()
+		put(`"}`)
 		f.Data = nil
 		if err := bw.Flush(); err != nil {
 			return err // the client went away; stop encoding for nobody
 		}
 	}
-	bw.WriteByte(']')
+	put("]")
 	if dropped != nil {
-		bw.WriteString(`,"filesDropped":`)
-		bw.Write(dropped)
+		put(`,"filesDropped":`)
+		_, _ = bw.Write(dropped)
 	}
-	bw.WriteString("}\n")
+	put("}\n")
 	return bw.Flush()
 }
 

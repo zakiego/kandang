@@ -266,7 +266,9 @@ except OSError as e:
 
 func TestITFilesRoundTrip(t *testing.T) {
 	blob := make([]byte, 3<<20)
-	rand.Read(blob)
+	if _, err := rand.Read(blob); err != nil {
+		t.Fatal(err)
+	}
 	sum := sha256.Sum256(blob)
 	res := runJob(t, "files", LangPython, `
 import hashlib, os, shutil

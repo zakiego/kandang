@@ -50,9 +50,9 @@ func TestStageWorkRejectsUncleanNames(t *testing.T) {
 
 func TestSeedDir(t *testing.T) {
 	src, dst := t.TempDir(), t.TempDir()
-	os.WriteFile(filepath.Join(src, "fontlist-v390.json"), []byte(`{"fonts":[]}`), 0o644)
-	os.Mkdir(filepath.Join(src, "sub"), 0o755)
-	os.Symlink("/etc/passwd", filepath.Join(src, "link"))
+	must(t, os.WriteFile(filepath.Join(src, "fontlist-v390.json"), []byte(`{"fonts":[]}`), 0o644))
+	must(t, os.Mkdir(filepath.Join(src, "sub"), 0o755))
+	must(t, os.Symlink("/etc/passwd", filepath.Join(src, "link")))
 	var chowned int
 	if err := SeedDir(src, dst, func(string) error { chowned++; return nil }); err != nil {
 		t.Fatal(err)
@@ -69,16 +69,16 @@ func TestSeedDir(t *testing.T) {
 func TestCollectOutputs(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out")
-	os.Mkdir(out, 0o755)
+	must(t, os.Mkdir(out, 0o755))
 	for i := range 12 {
-		os.WriteFile(filepath.Join(out, fmt.Sprintf("f%02d.txt", i)), []byte(fmt.Sprint(i)), 0o644)
+		must(t, os.WriteFile(filepath.Join(out, fmt.Sprintf("f%02d.txt", i)), []byte(fmt.Sprint(i)), 0o644))
 	}
-	os.WriteFile(filepath.Join(out, "big.bin"), make([]byte, MaxOutputFileBytes+1), 0o644)
-	os.Mkdir(filepath.Join(out, "sub"), 0o755)
-	os.WriteFile(filepath.Join(out, "sub", "deep.txt"), []byte("no"), 0o644)
-	os.WriteFile(filepath.Join(dir, "secret"), []byte("host file"), 0o644)
-	os.Symlink(filepath.Join(dir, "secret"), filepath.Join(out, "a-link"))
-	os.WriteFile(filepath.Join(out, "bad\nname"), []byte("x"), 0o644)
+	must(t, os.WriteFile(filepath.Join(out, "big.bin"), make([]byte, MaxOutputFileBytes+1), 0o644))
+	must(t, os.Mkdir(filepath.Join(out, "sub"), 0o755))
+	must(t, os.WriteFile(filepath.Join(out, "sub", "deep.txt"), []byte("no"), 0o644))
+	must(t, os.WriteFile(filepath.Join(dir, "secret"), []byte("host file"), 0o644))
+	must(t, os.Symlink(filepath.Join(dir, "secret"), filepath.Join(out, "a-link")))
+	must(t, os.WriteFile(filepath.Join(out, "bad\nname"), []byte("x"), 0o644))
 
 	files, dropped, err := CollectOutputs(dir)
 	if err != nil {
@@ -120,13 +120,13 @@ func TestCollectOutputsMissingOrReplaced(t *testing.T) {
 	if err != nil || files != nil || dropped != nil {
 		t.Errorf("no out dir: %v %v %v", files, dropped, err)
 	}
-	os.WriteFile(filepath.Join(dir, "out"), []byte("x"), 0o644)
+	must(t, os.WriteFile(filepath.Join(dir, "out"), []byte("x"), 0o644))
 	_, dropped, err = CollectOutputs(dir)
 	if err != nil || len(dropped) != 1 || dropped[0].Reason != DropOutMissing {
 		t.Errorf("out is a file: %v %v", dropped, err)
 	}
 	dir2 := t.TempDir()
-	os.Symlink("/", filepath.Join(dir2, "out"))
+	must(t, os.Symlink("/", filepath.Join(dir2, "out")))
 	files, dropped, err = CollectOutputs(dir2)
 	if err != nil || len(files) != 0 || len(dropped) != 1 {
 		t.Errorf("out is a symlink to /: files=%d dropped=%v err=%v", len(files), dropped, err)
@@ -140,10 +140,10 @@ func TestCollectOutputsMissingOrReplaced(t *testing.T) {
 func TestCollectOutputsRaces(t *testing.T) {
 	setup := func(t *testing.T) (dir, host string) {
 		host = t.TempDir() // stands in for a host dir such as /etc/kandang
-		os.WriteFile(filepath.Join(host, "token"), []byte("host secret"), 0o600)
+		must(t, os.WriteFile(filepath.Join(host, "token"), []byte("host secret"), 0o600))
 		dir = t.TempDir()
-		os.Mkdir(filepath.Join(dir, "out"), 0o755)
-		os.WriteFile(filepath.Join(dir, "out", "token"), []byte("sandbox file"), 0o644)
+		must(t, os.Mkdir(filepath.Join(dir, "out"), 0o755))
+		must(t, os.WriteFile(filepath.Join(dir, "out", "token"), []byte("sandbox file"), 0o644))
 		t.Cleanup(func() { raceHook = nil })
 		return dir, host
 	}
@@ -160,8 +160,8 @@ func TestCollectOutputsRaces(t *testing.T) {
 		dir, host := setup(t)
 		raceHook = func(stage string) {
 			if stage == "out" {
-				os.Rename(filepath.Join(dir, "out"), filepath.Join(dir, "parked"))
-				os.Symlink(host, filepath.Join(dir, "out"))
+				must(t, os.Rename(filepath.Join(dir, "out"), filepath.Join(dir, "parked")))
+				must(t, os.Symlink(host, filepath.Join(dir, "out")))
 			}
 		}
 		files, dropped, err := CollectOutputs(dir)
@@ -175,8 +175,8 @@ func TestCollectOutputsRaces(t *testing.T) {
 		dir, host := setup(t)
 		raceHook = func(stage string) {
 			if stage == "file" {
-				os.Remove(filepath.Join(dir, "out", "token"))
-				os.Symlink(filepath.Join(host, "token"), filepath.Join(dir, "out", "token"))
+				must(t, os.Remove(filepath.Join(dir, "out", "token")))
+				must(t, os.Symlink(filepath.Join(host, "token"), filepath.Join(dir, "out", "token")))
 			}
 		}
 		files, dropped, err := CollectOutputs(dir)
@@ -190,7 +190,7 @@ func TestCollectOutputsRaces(t *testing.T) {
 		dir, _ := setup(t)
 		raceHook = func(stage string) {
 			if stage == "file" {
-				os.Remove(filepath.Join(dir, "out", "token"))
+				must(t, os.Remove(filepath.Join(dir, "out", "token")))
 				if err := syscall.Mkfifo(filepath.Join(dir, "out", "token"), 0o644); err != nil {
 					t.Fatal(err)
 				}
@@ -209,7 +209,7 @@ func TestCollectOutputsRaces(t *testing.T) {
 func TestCollectOutputsManyEntries(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out")
-	os.Mkdir(out, 0o755)
+	must(t, os.Mkdir(out, 0o755))
 	for i := range MaxOutputScan + 500 {
 		if err := os.Mkdir(filepath.Join(out, fmt.Sprintf("d%05d", i)), 0o755); err != nil {
 			t.Fatal(err)
@@ -229,11 +229,11 @@ func TestCollectOutputsManyEntries(t *testing.T) {
 
 	// Exactly at the scan limit nothing is cut.
 	dir2 := t.TempDir()
-	os.Mkdir(filepath.Join(dir2, "out"), 0o755)
+	must(t, os.Mkdir(filepath.Join(dir2, "out"), 0o755))
 	for i := range MaxDroppedListed {
-		os.Mkdir(filepath.Join(dir2, "out", fmt.Sprintf("d%03d", i)), 0o755)
+		must(t, os.Mkdir(filepath.Join(dir2, "out", fmt.Sprintf("d%03d", i)), 0o755))
 	}
-	os.WriteFile(filepath.Join(dir2, "out", "a.txt"), []byte("kept"), 0o644)
+	must(t, os.WriteFile(filepath.Join(dir2, "out", "a.txt"), []byte("kept"), 0o644))
 	files, dropped, err = CollectOutputs(dir2)
 	if err != nil || len(files) != 1 || len(dropped) != MaxDroppedListed {
 		t.Errorf("files=%d dropped=%d err=%v", len(files), len(dropped), err)

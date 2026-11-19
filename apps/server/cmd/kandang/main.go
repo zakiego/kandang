@@ -45,12 +45,12 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprint(stderr, usage)
+		_, _ = fmt.Fprint(stderr, usage)
 		return 2
 	}
 	switch args[0] {
 	case "version", "--version", "-v":
-		fmt.Fprintln(stdout, version)
+		_, _ = fmt.Fprintln(stdout, version)
 		return 0
 	case "serve":
 		cfg, ok := parse("serve", args[1:], stderr)
@@ -58,7 +58,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 		if err := serve(cfg, stderr); err != nil {
-			fmt.Fprintln(stderr, "kandang:", err)
+			_, _ = fmt.Fprintln(stderr, "kandang:", err)
 			return 1
 		}
 		return 0
@@ -72,10 +72,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	case "help", "-h", "--help":
-		fmt.Fprint(stdout, usage)
+		_, _ = fmt.Fprint(stdout, usage)
 		return 0
 	}
-	fmt.Fprintf(stderr, "kandang: unknown command %q\n\n%s", args[0], usage)
+	_, _ = fmt.Fprintf(stderr, "kandang: unknown command %q\n\n%s", args[0], usage)
 	return 2
 }
 
@@ -85,7 +85,7 @@ func parse(name string, args []string, stderr io.Writer) (config.Config, bool) {
 		return cfg, false
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, "kandang:", err)
+		_, _ = fmt.Fprintln(stderr, "kandang:", err)
 		return cfg, false
 	}
 	return cfg, true
@@ -98,10 +98,10 @@ func check(cfg config.Config, stdout io.Writer) bool {
 	line := func(name string, err error, detail string) {
 		if err != nil {
 			ok = false
-			fmt.Fprintf(stdout, "FAIL  %-8s %v\n", name, err)
+			_, _ = fmt.Fprintf(stdout, "FAIL  %-8s %v\n", name, err)
 			return
 		}
-		fmt.Fprintf(stdout, "ok    %-8s %s\n", name, detail)
+		_, _ = fmt.Fprintf(stdout, "ok    %-8s %s\n", name, detail)
 	}
 	ver, err := sandbox.RunscVersion(context.Background(), cfg.Runsc)
 	line("runsc", err, ver)

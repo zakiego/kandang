@@ -9,7 +9,7 @@ import (
 // Name errors. The API turns them into 400s with the file's index.
 var (
 	ErrNameEmpty   = errors.New("name is empty")
-	ErrNameDotDot  = errors.New("name contains ..")
+	ErrNameDotDot  = errors.New(`name contains a ".." element`)
 	ErrNameControl = errors.New("name contains control characters")
 	ErrNameLong    = errors.New("name is longer than 128 bytes")
 	ErrNameUTF8    = errors.New("name isn't valid UTF-8")

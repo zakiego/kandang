@@ -152,9 +152,12 @@ func (r *runscRunner) Run(ctx context.Context, job Job) (res Result, err error) 
 	if err != nil {
 		return Result{}, err
 	}
-	defer cgDir.Close()
+	defer func() { _ = cgDir.Close() }()
 
 	stdout, stderr := NewCapWriter(MaxStreamBytes), NewCapWriter(MaxStreamBytes)
+	// note appends one of kandang's own lines to the run's stderr. A CapWriter
+	// never fails, so there is no error to pass on.
+	note := func(format string, a ...any) { _, _ = fmt.Fprintf(stderr, format, a...) }
 	// Not CommandContext: a timeout or a cancel kills the whole cgroup, not
 	// just the runsc process.
 	cmd := r.runsc(context.Background(), "run", "--bundle", bundleDir, job.ID)
@@ -202,15 +205,15 @@ func (r *runscRunner) Run(ctx context.Context, job Job) (res Result, err error) 
 	res.OOMKilled = cg.OOMKills() > 0
 	res.TimedOut = timedOut
 	if cg.PidsLimited() {
-		fmt.Fprintf(stderr, "\n[kandang] the run hit its process limit (%d processes); fork or thread creation failed past it\n", r.cfg.Limits.Procs)
+		note("\n[kandang] the run hit its process limit (%d processes); fork or thread creation failed past it\n", r.cfg.Limits.Procs)
 	}
 	switch {
 	case timedOut:
 		res.ExitCode = ExitTimedOut
-		fmt.Fprintf(stderr, "\n[kandang] stopped: the run hit its %s timeout\n", job.Timeout)
+		note("\n[kandang] stopped: the run hit its %s timeout\n", job.Timeout)
 	case res.OOMKilled:
 		res.ExitCode = ExitOOMKilled
-		fmt.Fprintf(stderr, "\n[kandang] stopped: the run went over its %d MiB memory limit\n", r.cfg.Limits.MemoryBytes>>20)
+		note("\n[kandang] stopped: the run went over its %d MiB memory limit\n", r.cfg.Limits.MemoryBytes>>20)
 	}
 	res.Stdout, res.Stderr = stdout.Output(), stderr.Output()
 

@@ -91,9 +91,9 @@ func TestTruncateUTF8(t *testing.T) {
 
 func TestCapWriterLargeSingleWrite(t *testing.T) {
 	w := NewCapWriter(64)
-	w.Write([]byte("0123456789"))
-	w.Write(bytes.Repeat([]byte("m"), 10000))
-	w.Write([]byte("END"))
+	_, _ = w.Write([]byte("0123456789"))
+	_, _ = w.Write(bytes.Repeat([]byte("m"), 10000))
+	_, _ = w.Write([]byte("END"))
 	out := w.Output()
 	if !bytes.HasPrefix(out.Data, []byte("0123456789")) || !bytes.HasSuffix(out.Data, []byte("END")) {
 		t.Errorf("got %q", out.Data)
