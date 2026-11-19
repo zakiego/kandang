@@ -250,6 +250,7 @@ func TestValidation(t *testing.T) {
 		{"nul in code", map[string]any{"language": "bash", "code": "a\x00b"}, 400, "invalid_code"},
 		{"code too big", map[string]any{"language": "bash", "code": strings.Repeat("x", 100<<10+1)}, 413, "code_too_large"},
 		{"timeout zero", map[string]any{"language": "bash", "code": "x", "timeoutSec": 0}, 400, "invalid_timeout"},
+		{"timeout rounds to zero", map[string]any{"language": "bash", "code": "x", "timeoutSec": 1e-10}, 400, "invalid_timeout"},
 		{"timeout negative", map[string]any{"language": "bash", "code": "x", "timeoutSec": -1}, 400, "invalid_timeout"},
 		{"timeout too long", map[string]any{"language": "bash", "code": "x", "timeoutSec": 301}, 400, "invalid_timeout"},
 		{"timeout string", `{"language":"bash","code":"x","timeoutSec":"5"}`, 400, "invalid_json"},
@@ -565,5 +566,13 @@ func TestLargeBodiesInFlightAreCapped(t *testing.T) {
 	// The places are free again once those runs are done.
 	if w := do(h, "POST", "/v1/runs", testToken, large); w.Code != 200 {
 		t.Errorf("large request after the others finished: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestFractionalTimeout(t *testing.T) {
+	f := &fakeRunner{ready: true}
+	w := do(newTest(t, f, nil), "POST", "/v1/runs", testToken, `{"language":"bash","code":"x","timeoutSec":0.5}`)
+	if w.Code != 200 || f.jobs[0].Timeout != 500*time.Millisecond {
+		t.Errorf("%d %s, timeout %v", w.Code, w.Body, f.jobs)
 	}
 }

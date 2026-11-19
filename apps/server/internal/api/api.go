@@ -303,8 +303,10 @@ func ValidateRun(req RunRequest, l sandbox.Limits) (sandbox.Job, *apiError) {
 	if req.TimeoutSec != nil {
 		t := *req.TimeoutSec
 		max := l.MaxTimeout.Seconds()
-		if math.IsNaN(t) || t <= 0 || t > max {
-			return job, bad("invalid_timeout", "timeoutSec must be more than 0 and at most %g", max)
+		// Below a millisecond the duration rounds to zero, which the runner
+		// refuses; that has to be a 400 here, not a 500 there.
+		if math.IsNaN(t) || t < 0.001 || t > max {
+			return job, bad("invalid_timeout", "timeoutSec must be at least 0.001 and at most %g", max)
 		}
 		job.Timeout = time.Duration(t * float64(time.Second))
 	}
