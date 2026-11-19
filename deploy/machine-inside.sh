@@ -38,7 +38,8 @@ if ! command -v runsc >/dev/null; then
 fi
 log "$(runsc --version | head -1)"
 
-# Egress rule: nothing leaving this machine may reach a private or link-local
+# Egress rule: nothing leaving this machine may reach a private, shared
+# (100.64.0.0/10, where a VPN mesh on the Mac would live) or link-local
 # address, except replies to connections that came in (the Mac and Palui call
 # Kandang; Kandang never calls them). IPv6 neighbor discovery and DHCP lease
 # renewals (the machine's gateway is a private address) stay allowed so the
@@ -53,7 +54,7 @@ table inet kandang_egress {
   set private4 {
     type ipv4_addr
     flags interval
-    elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 }
+    elements = { 10.0.0.0/8, 100.64.0.0/10, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 }
   }
   set private6 {
     type ipv6_addr
