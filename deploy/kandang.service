@@ -34,7 +34,9 @@ KillMode=mixed
 UMask=0077
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/var/lib/kandang /sys/fs/cgroup
+# Only the state dir is writable: the rootfs every run shares stays
+# read-only for kandang and runsc too.
+ReadWritePaths=/var/lib/kandang/state /sys/fs/cgroup
 ProtectHome=yes
 PrivateTmp=yes
 ProtectKernelModules=yes
