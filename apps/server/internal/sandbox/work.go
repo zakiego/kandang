@@ -108,15 +108,24 @@ const (
 	DropTooMany    = "more than 10 files in /work/out"
 	DropBadName    = "file name isn't allowed"
 	DropOutMissing = "/work/out isn't a directory"
+	DropChanged    = "changed while it was being read"
 )
 
 // CollectOutputs reads the top-level regular files in dir/out after a run,
 // sorted by name: at most MaxOutputFiles, each at most MaxOutputFileBytes.
-// Everything else is listed as dropped with a reason. Symlinks are never
-// followed: the sandbox wrote this directory and is not trusted.
+// Everything else is listed as dropped with a reason.
+//
+// The sandbox wrote this directory and is not trusted. Every path is
+// resolved inside a root at dir (the host side of /work), out included, so
+// a symlink can never lead to a host file, even one swapped in while this
+// runs. A link that stays inside /work is only reported as dropped.
 func CollectOutputs(dir string) ([]File, []Dropped, error) {
-	outPath := filepath.Join(dir, "out")
-	st, err := os.Lstat(outPath)
+	work, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer work.Close()
+	st, err := work.Lstat("out")
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil // the code removed it; nothing to return
 	}
@@ -126,9 +135,13 @@ func CollectOutputs(dir string) ([]File, []Dropped, error) {
 	if !st.IsDir() {
 		return nil, []Dropped{{Name: "out", Reason: DropOutMissing}}, nil
 	}
-	root, err := os.OpenRoot(outPath)
+	if raceHook != nil {
+		raceHook("out")
+	}
+	root, err := work.OpenRoot("out")
 	if err != nil {
-		return nil, nil, err
+		// It was a directory a moment ago: something replaced it.
+		return nil, []Dropped{{Name: "out", Reason: DropOutMissing}}, nil
 	}
 	defer root.Close()
 	entries, err := fs.ReadDir(root.FS(), ".")
@@ -147,7 +160,8 @@ func CollectOutputs(dir string) ([]File, []Dropped, error) {
 		}
 		info, err := root.Lstat(name)
 		if err != nil {
-			return nil, nil, err
+			dropped = append(dropped, Dropped{Name: name, Reason: DropChanged})
+			continue
 		}
 		switch {
 		case info.IsDir():
@@ -163,27 +177,53 @@ func CollectOutputs(dir string) ([]File, []Dropped, error) {
 			dropped = append(dropped, Dropped{Name: name, Reason: DropTooMany})
 			continue
 		}
+		if raceHook != nil {
+			raceHook("file")
+		}
 		data, err := readCapped(root, name)
-		if errors.Is(err, errTooLarge) {
+		switch {
+		case errors.Is(err, errTooLarge):
 			dropped = append(dropped, Dropped{Name: name, Reason: DropTooLarge})
-			continue
+		case errors.Is(err, errNotRegular):
+			dropped = append(dropped, Dropped{Name: name, Reason: DropNotRegular})
+		case err != nil:
+			// Gone, replaced or pointing out of /work since the Lstat above.
+			dropped = append(dropped, Dropped{Name: name, Reason: DropChanged})
+		default:
+			files = append(files, File{Name: name, Data: data})
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-		files = append(files, File{Name: name, Data: data})
 	}
 	return files, dropped, nil
 }
 
-var errTooLarge = errors.New("too large")
+// raceHook is nil outside tests. A test sets it to change a path between the
+// check on it and the open that follows, the way a sandbox process that is
+// still alive could.
+var raceHook func(stage string)
 
+var (
+	errTooLarge   = errors.New("too large")
+	errNotRegular = errors.New("not a regular file")
+)
+
+// readCapped reads one output file. The checks that matter are made on the
+// open file, not on the name: the name may point at something else by now.
 func readCapped(root *os.Root, name string) ([]byte, error) {
 	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !st.Mode().IsRegular() {
+		return nil, errNotRegular
+	}
+	if st.Size() > MaxOutputFileBytes {
+		return nil, errTooLarge
+	}
 	data, err := io.ReadAll(io.LimitReader(f, MaxOutputFileBytes+1))
 	if err != nil {
 		return nil, err

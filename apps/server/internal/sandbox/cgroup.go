@@ -138,6 +138,25 @@ func (g *Cgroup) Kill() error {
 	return cerr
 }
 
+// KillAndWait kills every process in the cgroup and waits up to wait until
+// none is left. After it returns nil, nothing from the run can still touch
+// its files. A cgroup that is already gone counts as empty.
+func (g *Cgroup) KillAndWait(wait time.Duration) error {
+	deadline := time.Now().Add(wait)
+	for {
+		if err := g.Kill(); errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if !g.Populated() {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("cgroup: %s still has processes %s after the kill", g.Path, wait)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 // Remove kills what's left and removes the cgroup, waiting up to wait for the
 // processes to go.
 func (g *Cgroup) Remove(wait time.Duration) error {

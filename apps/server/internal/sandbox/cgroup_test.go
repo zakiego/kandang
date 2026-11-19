@@ -142,3 +142,36 @@ func TestCgroupCheck(t *testing.T) {
 		t.Error("Check created the parent; it must only read")
 	}
 }
+
+func TestCgroupKillAndWait(t *testing.T) {
+	c := Cgroups{Root: t.TempDir()}
+	c.Setup()
+	g, err := c.Create(NewID(), DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(g.Path, "cgroup.kill"), nil, 0o644)
+
+	// Still populated: it must not report the run as gone.
+	os.WriteFile(filepath.Join(g.Path, "cgroup.events"), []byte("populated 1\nfrozen 0\n"), 0o644)
+	if err := g.KillAndWait(40 * time.Millisecond); err == nil {
+		t.Error("KillAndWait = nil while the cgroup still has processes")
+	}
+	if got := readTrim(t, filepath.Join(g.Path, "cgroup.kill")); got != "1" {
+		t.Errorf("cgroup.kill = %q, want the kill to be sent", got)
+	}
+
+	// The processes go away a little later.
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		os.WriteFile(filepath.Join(g.Path, "cgroup.events"), []byte("populated 0\nfrozen 0\n"), 0o644)
+	}()
+	if err := g.KillAndWait(2 * time.Second); err != nil {
+		t.Errorf("KillAndWait = %v after the cgroup emptied", err)
+	}
+
+	gone := &Cgroup{Path: filepath.Join(c.Parent(), NewID())}
+	if err := gone.KillAndWait(time.Second); err != nil {
+		t.Errorf("KillAndWait of a missing cgroup = %v", err)
+	}
+}

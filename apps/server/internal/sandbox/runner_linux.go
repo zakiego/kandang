@@ -213,6 +213,12 @@ func (r *runscRunner) Run(ctx context.Context, job Job) (res Result, err error) 
 	}
 	res.Stdout, res.Stderr = stdout.Output(), stderr.Output()
 
+	// runsc has exited, but that alone doesn't prove the sentry and the gofer
+	// are gone (runsc can die first when the cgroup runs out of pids). Nothing
+	// from the run may still be alive while its outputs are read.
+	if err := cg.KillAndWait(10 * time.Second); err != nil {
+		return Result{}, fmt.Errorf("sandbox: %w", err)
+	}
 	res.Files, res.Dropped, err = CollectOutputs(workDir)
 	if err != nil {
 		return Result{}, fmt.Errorf("sandbox: collect outputs: %w", err)

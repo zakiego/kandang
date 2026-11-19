@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -130,4 +131,75 @@ func TestCollectOutputsMissingOrReplaced(t *testing.T) {
 	if err != nil || len(files) != 0 || len(dropped) != 1 {
 		t.Errorf("out is a symlink to /: files=%d dropped=%v err=%v", len(files), dropped, err)
 	}
+}
+
+// A sandbox process that is still alive while the outputs are read can change
+// a path between the check on it and the open that follows. raceHook stands
+// in for that process. Whatever it swaps in, nothing outside the work dir may
+// come back.
+func TestCollectOutputsRaces(t *testing.T) {
+	setup := func(t *testing.T) (dir, host string) {
+		host = t.TempDir() // stands in for a host dir such as /etc/kandang
+		os.WriteFile(filepath.Join(host, "token"), []byte("host secret"), 0o600)
+		dir = t.TempDir()
+		os.Mkdir(filepath.Join(dir, "out"), 0o755)
+		os.WriteFile(filepath.Join(dir, "out", "token"), []byte("sandbox file"), 0o644)
+		t.Cleanup(func() { raceHook = nil })
+		return dir, host
+	}
+	noSecret := func(t *testing.T, files []File) {
+		t.Helper()
+		for _, f := range files {
+			if string(f.Data) == "host secret" {
+				t.Fatalf("a host file came back as output %q", f.Name)
+			}
+		}
+	}
+
+	t.Run("out becomes a symlink to a host dir", func(t *testing.T) {
+		dir, host := setup(t)
+		raceHook = func(stage string) {
+			if stage == "out" {
+				os.Rename(filepath.Join(dir, "out"), filepath.Join(dir, "parked"))
+				os.Symlink(host, filepath.Join(dir, "out"))
+			}
+		}
+		files, dropped, err := CollectOutputs(dir)
+		noSecret(t, files)
+		if err != nil || len(files) != 0 || len(dropped) != 1 || dropped[0].Reason != DropOutMissing {
+			t.Errorf("files=%v dropped=%v err=%v", files, dropped, err)
+		}
+	})
+
+	t.Run("a file becomes a symlink to a host file", func(t *testing.T) {
+		dir, host := setup(t)
+		raceHook = func(stage string) {
+			if stage == "file" {
+				os.Remove(filepath.Join(dir, "out", "token"))
+				os.Symlink(filepath.Join(host, "token"), filepath.Join(dir, "out", "token"))
+			}
+		}
+		files, dropped, err := CollectOutputs(dir)
+		noSecret(t, files)
+		if err != nil || len(files) != 0 || len(dropped) != 1 || dropped[0].Reason != DropChanged {
+			t.Errorf("files=%v dropped=%v err=%v", files, dropped, err)
+		}
+	})
+
+	t.Run("a file becomes a fifo", func(t *testing.T) {
+		dir, _ := setup(t)
+		raceHook = func(stage string) {
+			if stage == "file" {
+				os.Remove(filepath.Join(dir, "out", "token"))
+				if err := syscall.Mkfifo(filepath.Join(dir, "out", "token"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		// A fifo with no writer must neither block the read nor come back.
+		files, dropped, err := CollectOutputs(dir)
+		if err != nil || len(files) != 0 || len(dropped) != 1 || dropped[0].Reason != DropNotRegular {
+			t.Errorf("files=%v dropped=%v err=%v", files, dropped, err)
+		}
+	})
 }
