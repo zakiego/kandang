@@ -181,14 +181,15 @@ func (r *runscRunner) Run(ctx context.Context, job Job) (res Result, err error) 
 	case waitErr = <-done:
 	case <-timer.C:
 		timedOut = true
-		r.kill(job.ID, cg)
-		waitErr = <-done
+		waitErr, err = r.killAndReap(job.ID, cg, cmd, done)
 	case <-ctx.Done():
 		canceled = true
-		r.kill(job.ID, cg)
-		waitErr = <-done
+		waitErr, err = r.killAndReap(job.ID, cg, cmd, done)
 	}
 	res.Duration = time.Since(start)
+	if err != nil {
+		return Result{}, err
+	}
 	if canceled {
 		return Result{}, ctx.Err()
 	}
@@ -250,6 +251,28 @@ func (r *runscRunner) kill(id string, cg *Cgroup) {
 		r.log.Warn("cgroup kill failed", "run", id, "err", err)
 	}
 	r.runscQuiet("kill", id, "KILL")
+}
+
+// killAndReap stops a run and waits for runsc to be reaped. The cgroup kill
+// normally takes runsc down at once. If it doesn't (the write to cgroup.kill
+// failed, say), waiting forever would hold a run slot for good, so runsc's
+// process group gets a SIGKILL of its own, and after that the run is given
+// up as an error.
+func (r *runscRunner) killAndReap(id string, cg *Cgroup, cmd *exec.Cmd, done <-chan error) (error, error) {
+	r.kill(id, cg)
+	select {
+	case waitErr := <-done:
+		return waitErr, nil
+	case <-time.After(10 * time.Second):
+	}
+	r.log.Warn("runsc survived the cgroup kill; killing its process group", "run", id)
+	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	select {
+	case waitErr := <-done:
+		return waitErr, nil
+	case <-time.After(5 * time.Second):
+		return nil, fmt.Errorf("sandbox: runsc for run %s didn't exit after it was killed", id)
+	}
 }
 
 // cleanup always runs after a run, whatever happened: delete the container,
