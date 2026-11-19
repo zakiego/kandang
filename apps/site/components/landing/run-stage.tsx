@@ -76,7 +76,7 @@ const same = (a: Snap, b: Snap) =>
 export function RunStage() {
   const ref = useRef<HTMLDivElement>(null)
   const [paused, setPaused] = useState(false)
-  const { state: s, reduced } = useLoopClock(ref, T.end, snapshot, same, paused)
+  const { state: s, reduced } = useLoopClock(ref, T.end, snapshot, same, T.fade - 1, paused)
   const caption = reduced ? CAPTIONS[2] : CAPTIONS[s.step].slice(0, s.chars)
 
   return (
@@ -91,7 +91,7 @@ export function RunStage() {
         <Button
           aria-label={paused ? "Play demo" : "Pause demo"}
           onClick={() => setPaused((p) => !p)}
-          className="absolute top-4 right-4 z-10 flex size-6 items-center justify-center rounded-full text-muted transition-[color,background-color,scale] duration-150 ease-[cubic-bezier(.25,.46,.45,.94)] hover:bg-white/[0.08] hover:text-fg active:scale-[0.97] md:top-10 md:right-10"
+          className="absolute top-4 right-6 z-10 flex size-6 items-center justify-center rounded-full text-muted transition-[color,background-color,scale] duration-150 ease-[cubic-bezier(.25,.46,.45,.94)] hover:bg-white/[0.08] hover:text-fg active:scale-[0.97] motion-reduce:hidden md:top-10 md:right-10"
         >
           {paused ? <PlayGlyph /> : <PauseGlyph />}
         </Button>
@@ -101,7 +101,7 @@ export function RunStage() {
         data-fading={s.fading || undefined}
         className="relative flex flex-col gap-3 p-4 transition-opacity duration-300 ease-[cubic-bezier(.215,.61,.355,1)] data-[fading]:opacity-0 md:gap-6 md:p-10"
       >
-        <div className="flex h-6 items-center gap-3 font-mono text-[12px] text-muted">
+        <div className="flex h-6 items-center gap-3 pr-8 font-mono text-[12px] text-muted">
           <span className="text-muted tabular-nums">0{reduced ? 3 : s.step + 1}/03</span>
           <span className="text-fg-2">{caption}</span>
         </div>
