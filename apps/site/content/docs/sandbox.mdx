@@ -1,0 +1,56 @@
+---
+title: Sandbox and limits
+description: What every run gets, and where it stops.
+---
+
+Every run gets its own gVisor sandbox: a user-space kernel that sits in front of the host's, so the code never talks to the host kernel directly.
+
+## What a run can't do
+
+| Try | What happens |
+| --- | --- |
+| Open a socket | `Network unreachable`. The run has its own network namespace and `runsc --network=none`. |
+| Allocate more than 1 GiB | Killed with exit code 137. |
+| Run past its timeout | The whole cgroup is killed, exit code 124. |
+| Fork without end | Stops at 64 processes with a clean `EAGAIN`. |
+| Write to the root | The root filesystem is read-only. |
+| Gain privileges | It runs as uid and gid 10001 with no capabilities and `noNewPrivileges`. |
+
+## Limits
+
+| What | Limit |
+| --- | --- |
+| Code | 100 KB |
+| Input files | 20 files, 15 MiB each, 50 MB in total |
+| Request body | About 68 MiB, checked before decoding |
+| Output files | 10 files from `/work/out`, 15 MiB each |
+| stdout, stderr | 32 KB each, head and tail |
+| Timeout | 60 s by default, 300 s at most |
+| Memory | 1 GiB, no swap |
+| CPU | One CPU |
+| Processes inside | 64 |
+| Host pids | 256, gVisor's own threads included |
+| Open files | 1024 |
+| `/tmp` | 256 MB tmpfs inside the sandbox |
+| `/work` | 512 MB tmpfs per run |
+| Concurrency | 2 runs at once and 10 waiting, then `429 busy` |
+
+## Measured
+
+On a Mac mini M4 (arm64):
+
+| Job | Time | Peak memory |
+| --- | --- | --- |
+| Start a sandbox | 25 to 36 ms | |
+| Light Python job | About 0.6 s | About 50 MB |
+| pandas chart over 500,000 rows | About 3.5 s | Up to 225 MB |
+| 12 MP photo edit | About 0.4 s | 145 MB |
+
+## A run, step by step
+
+1. The request is checked, then waits for one of the two run slots.
+2. Kandang mounts a 512 MB tmpfs for the run and writes the script, `in/` and an empty `out/` into it, owned by uid 10001.
+3. It writes the OCI config: the shared rootfs read-only, tmpfs `/tmp`, the run's dir at `/work`, its own pid, network, ipc, uts and mount namespaces, and hostname `kandang`.
+4. It creates a cgroup with the limits above and starts `runsc` straight into it, so the sandbox is capped from its first instruction.
+5. On timeout it kills the whole cgroup.
+6. It reads the peak memory and `/work/out`, then removes the sandbox, the cgroup, the tmpfs and the run dir. Whatever a crash leaves behind is swept at the next start.
