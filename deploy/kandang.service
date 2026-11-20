@@ -1,0 +1,54 @@
+[Unit]
+Description=Kandang code sandbox (gVisor)
+Documentation=https://github.com/zakiego/kandang
+After=network-online.target nftables.service
+Wants=network-online.target
+# No egress rule, no kandang: if nftables.service fails to load the ruleset
+# (or is stopped), this unit doesn't run.
+Requires=nftables.service
+
+[Service]
+Type=simple
+# Root is needed: kandang creates cgroups under /sys/fs/cgroup/kandang,
+# mounts a tmpfs per run and starts runsc, which sets up its own namespaces.
+User=root
+ExecStartPre=/opt/kandang/bin/kandang check
+ExecStart=/opt/kandang/bin/kandang serve
+# Go's soft memory limit, under MemoryMax below, so the collector works
+# harder before the kernel has to kill kandang.
+Environment=GOMEMLIMIT=600MiB
+# Optional overrides (KANDANG_LISTEN, KANDANG_MAX_RUNNING, ...), one per line.
+EnvironmentFile=-/etc/kandang/kandang.conf
+# Runs live in their own cgroups, outside this unit, so systemd doesn't stop
+# them. If kandang dies without cleaning up (killed, or it can't start
+# again), nothing enforces their timeouts any more: kill whatever is left.
+ExecStopPost=/bin/sh -c 'for k in /sys/fs/cgroup/kandang/*/cgroup.kill; do [ -w "$$k" ] && echo 1 > "$$k"; done; exit 0'
+Restart=on-failure
+RestartSec=2s
+# SIGTERM cancels the runs in flight; give their cleanup time.
+TimeoutStopSec=30s
+KillMode=mixed
+
+# Hardening that leaves runsc working. Runs live in their own cgroups
+# (outside this unit), so the memory cap below is kandang's own.
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+# Only the state dir is writable: the rootfs every run shares stays
+# read-only for kandang and runsc too.
+ReadWritePaths=/var/lib/kandang/state /sys/fs/cgroup
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+MemoryMax=768M
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   server:
     name: Server (vet, lint, test, build)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.RUNS_ON || '"ubuntu-latest"') }}
     defaults:
       run:
         working-directory: apps/server
@@ -53,7 +53,7 @@ jobs:
 
   site:
     name: Site (typecheck, test, build)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
