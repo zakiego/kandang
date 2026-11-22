@@ -40,8 +40,8 @@ log "$(runsc --version | head -1)"
 
 # Egress rule: nothing leaving this machine may reach a private, shared
 # (100.64.0.0/10, where a VPN mesh on the Mac would live) or link-local
-# address, except replies to connections that came in (the Mac and Palui call
-# Kandang; Kandang never calls them). IPv6 neighbor discovery and DHCP lease
+# address, except replies to connections that came in (the Mac and its clients
+# call Kandang; Kandang never calls them). IPv6 neighbor discovery and DHCP lease
 # renewals (the machine's gateway is a private address) stay allowed so the
 # link keeps working. The machine is dedicated to Kandang, so this file
 # is the whole ruleset.
