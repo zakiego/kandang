@@ -148,13 +148,7 @@ export function Name() {
           Kandang is Indonesian for a pen
         </h2>
         <p className="mt-4 text-[15px] leading-6 text-muted md:text-[17px]">
-          Built first for{" "}
-          <a
-            href="https://palui.zakiego.com"
-            className="text-fg underline decoration-faint underline-offset-[0.2em] transition-[text-decoration-color] duration-250 hover:decoration-fg"
-          >
-            Palui
-          </a>
+          Things go in, results come out, nothing else gets through the walls.
         </p>
       </div>
     </section>

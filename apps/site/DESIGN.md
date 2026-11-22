@@ -6,14 +6,14 @@ The public site at kandang.zakiego.com: the landing page now, the docs later (Fu
 
 Written before building (anti-ui-slop step 1). The finish gate checks against it.
 
-- Audience: engineers building AI agents who want their agent to run code and make files without running it on their own machine. A few arrive from Palui.
+- Audience: engineers building AI agents who want their agent to run code and make files without running it on their own machine.
 - Primary task: understand in one screen what Kandang is and why it's safe, then see the one endpoint.
 - Category default: a "sandbox for AI" SaaS landing with a purple gradient hero, a feature grid of six icon cards, a fake customer logo strip and "Start free".
 - Predictable opposite: a README rendered as a page.
 - Neither. Kandang's own idea is the pen: things go in, results come out, nothing else gets through the walls. The first screen shows one run from the agent's seat: code and a file go into a box, the box starts in milliseconds, a chart and a spreadsheet come back out, and an attempt to reach the network stays inside.
 - Content rules: one headline, one sentence, one call to action, one visual. Facts only: the measured numbers from the Mac mini M4 run and the limits that held. No invented customers, users, prices or numbers. No sign-up and no pricing.
-- Public copy: no people's names, home paths, internal hostnames or IPs. Palui is named only as the first client.
-- Look: its own, not Palui's (dark mono, IBM Plex, an isometric mascot) and not any other zakiego site. Type, spacing, buttons and motion follow the Linear reference in TASTE.md.
+- Public copy: no people's names, home paths, internal hostnames or IPs, and no other projects of the author.
+- Look: its own (no dark mono, IBM Plex or isometric mascot), not borrowed from another site. Type, spacing, buttons and motion follow the Linear reference in TASTE.md.
 - States and sizes: static page, so no loading or error states. Works at 390, 768, 1024 and 1440 wide. On a phone the copy comes first, and the run demo with its caption fits in one screen.
 
 ## Decisions
