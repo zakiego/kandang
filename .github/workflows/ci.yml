@@ -12,10 +12,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# RUNS_ON (a repo variable, JSON: a label or a list of labels) picks a
+# self-hosted runner for pushes and same-repo PRs. Pull requests from forks run
+# untrusted code, so they always go to GitHub-hosted runners. Without
+# RUNS_ON everything runs on ubuntu-latest.
 jobs:
   server:
     name: Server (vet, lint, test, build)
-    runs-on: ${{ fromJSON(vars.RUNS_ON || '"ubuntu-latest"') }}
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON(vars.RUNS_ON || '"ubuntu-latest"') }}
     defaults:
       run:
         working-directory: apps/server
@@ -53,7 +57,7 @@ jobs:
 
   site:
     name: Site (typecheck, test, build)
-    runs-on: ${{ fromJSON(vars.RUNS_ON || '"ubuntu-latest"') }}
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON(vars.RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
