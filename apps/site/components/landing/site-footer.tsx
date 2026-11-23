@@ -9,10 +9,10 @@ export function SiteFooter() {
           Kandang
         </span>
         <a
-          href="https://palui.zakiego.com"
+          href="https://github.com/zakiego/kandang"
           className="transition-colors duration-100 hover:text-fg"
         >
-          Palui ↗
+          GitHub ↗
         </a>
       </div>
     </footer>

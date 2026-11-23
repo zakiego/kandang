@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Prints Kandang's bearer token so you can paste it into the client (for
-# Palui, the sandbox connector's form). It's the only place the token is ever
+# Prints Kandang's bearer token so you can paste it into the client (an agent
+# app's sandbox connector, for example). It's the only place the token is ever
 # shown. Run it yourself, in your own terminal.
 #
 #   deploy/show-token.sh [machine]     (default machine name: kandang)
