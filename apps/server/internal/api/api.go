@@ -180,20 +180,28 @@ func tooLarge(code, format string, a ...any) *apiError {
 	return &apiError{status: http.StatusRequestEntityTooLarge, code: code, message: fmt.Sprintf(format, a...)}
 }
 
-func (s *server) run(w http.ResponseWriter, r *http.Request) {
-	if !s.authorized(r) {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="kandang"`)
-		writeError(w, http.StatusUnauthorized, "unauthorized", "missing or wrong bearer token")
-		return
+// authorize writes the 401 when the bearer token is missing or wrong.
+func (s *server) authorize(w http.ResponseWriter, r *http.Request) bool {
+	if s.authorized(r) {
+		return true
 	}
-	if !s.opt.Runner.Status().Ready {
-		writeError(w, http.StatusServiceUnavailable, "not_ready", "the sandbox isn't ready (runsc or the rootfs is missing); see GET /health")
-		return
-	}
+	w.Header().Set("WWW-Authenticate", `Bearer realm="kandang"`)
+	writeError(w, http.StatusUnauthorized, "unauthorized", "missing or wrong bearer token")
+	return false
+}
+
+// notReadyMessage is the not_ready message when runsc or the rootfs is missing.
+const notReadyMessage = "the sandbox isn't ready (runsc or the rootfs is missing); see GET /health"
+
+// admitBody checks a run request's declared size and caps its body. done
+// gives back the request's place among the large bodies and must be called
+// once the request is over.
+func (s *server) admitBody(w http.ResponseWriter, r *http.Request) (done func(), ok bool) {
 	if r.ContentLength > MaxBodyBytes {
 		writeError(w, http.StatusRequestEntityTooLarge, "body_too_large", fmt.Sprintf("request body is over %d bytes", MaxBodyBytes))
-		return
+		return nil, false
 	}
+	done = func() {}
 	// Requests wait for a run slot with their files already decoded, so the
 	// large ones are counted before a byte of the body is read. Without this,
 	// twelve 50 MiB requests at once take kandang past its own memory cap,
@@ -202,14 +210,75 @@ func (s *server) run(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength < 0 || r.ContentLength > LargeBodyBytes {
 		select {
 		case s.large <- struct{}{}:
-			defer func() { <-s.large }()
+			done = func() { <-s.large }
 		default:
 			w.Header().Set("Retry-After", "10")
 			writeError(w, http.StatusTooManyRequests, "busy", "too many requests with large input files are in flight; try again shortly")
-			return
+			return nil, false
 		}
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
+	return done, true
+}
+
+// errGone is execute's answer when the client went away: nothing is written.
+var errGone = &apiError{code: "gone", message: "the client went away"}
+
+// execute waits for a run slot and runs job. When it succeeds, the slot is
+// held until release is called, so the response is written inside it.
+func (s *server) execute(ctx context.Context, job sandbox.Job) (res sandbox.Result, release func(), aerr *apiError) {
+	rel, err := s.opt.Queue.Acquire(ctx)
+	if errors.Is(err, queue.ErrBusy) {
+		return res, nil, &apiError{status: http.StatusTooManyRequests, code: "busy", message: "every run slot and waiting place is taken; try again shortly"}
+	}
+	if err != nil {
+		return res, nil, errGone // the client went away while waiting
+	}
+	start := time.Now()
+	res, err = s.opt.Runner.Run(ctx, job)
+	if err != nil {
+		rel()
+		switch {
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			s.opt.Log.Info("run canceled", "run", job.ID, "err", err)
+			return res, nil, errGone
+		case errors.Is(err, sandbox.ErrNotReady), errors.Is(err, sandbox.ErrUnsupported):
+			return res, nil, &apiError{status: http.StatusServiceUnavailable, code: "not_ready", message: err.Error()}
+		default:
+			s.opt.Log.Error("run failed", "run", job.ID, "err", err)
+			return res, nil, &apiError{status: http.StatusInternalServerError, code: "internal", message: "the run failed inside kandang; run id " + job.ID}
+		}
+	}
+	s.opt.Log.Info("run",
+		"run", job.ID, "language", job.Language, "exit", res.ExitCode, "timedOut", res.TimedOut,
+		"oom", res.OOMKilled, "ms", res.Duration.Milliseconds(), "peakMb", mb(res.PeakMemoryBytes),
+		"filesIn", len(job.Files), "filesOut", len(res.Files), "dropped", len(res.Dropped),
+		"wallMs", time.Since(start).Milliseconds())
+	return res, rel, nil
+}
+
+// writeDeadline gives the client ResponseWriteTimeout to read a run's
+// response, since the run slot is still held while it is written. The
+// returned func clears it: the connection may be reused for a longer run.
+func writeDeadline(w http.ResponseWriter) (clear func()) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(ResponseWriteTimeout))
+	return func() { _ = rc.SetWriteDeadline(time.Time{}) }
+}
+
+func (s *server) run(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(w, r) {
+		return
+	}
+	if !s.opt.Runner.Status().Ready {
+		writeError(w, http.StatusServiceUnavailable, "not_ready", notReadyMessage)
+		return
+	}
+	done, ok := s.admitBody(w, r)
+	if !ok {
+		return
+	}
+	defer done()
 	var req RunRequest
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
@@ -233,42 +302,19 @@ func (s *server) run(w http.ResponseWriter, r *http.Request) {
 	}
 	job.ID = s.opt.NewID()
 
-	release, err := s.opt.Queue.Acquire(r.Context())
-	if errors.Is(err, queue.ErrBusy) {
-		w.Header().Set("Retry-After", "10")
-		writeError(w, http.StatusTooManyRequests, "busy", "every run slot and waiting place is taken; try again shortly")
+	res, release, aerr := s.execute(r.Context(), job)
+	if aerr == errGone {
 		return
 	}
-	if err != nil {
-		return // the client went away while waiting
+	if aerr != nil {
+		if aerr.code == "busy" {
+			w.Header().Set("Retry-After", "10")
+		}
+		writeError(w, aerr.status, aerr.code, aerr.message)
+		return
 	}
 	defer release()
-
-	start := time.Now()
-	res, err := s.opt.Runner.Run(r.Context(), job)
-	if err != nil {
-		switch {
-		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-			s.opt.Log.Info("run canceled", "run", job.ID, "err", err)
-			return
-		case errors.Is(err, sandbox.ErrNotReady), errors.Is(err, sandbox.ErrUnsupported):
-			writeError(w, http.StatusServiceUnavailable, "not_ready", err.Error())
-		default:
-			s.opt.Log.Error("run failed", "run", job.ID, "err", err)
-			writeError(w, http.StatusInternalServerError, "internal", "the run failed inside kandang; run id "+job.ID)
-		}
-		return
-	}
-	s.opt.Log.Info("run",
-		"run", job.ID, "language", job.Language, "exit", res.ExitCode, "timedOut", res.TimedOut,
-		"oom", res.OOMKilled, "ms", res.Duration.Milliseconds(), "peakMb", mb(res.PeakMemoryBytes),
-		"filesIn", len(job.Files), "filesOut", len(res.Files), "dropped", len(res.Dropped),
-		"wallMs", time.Since(start).Milliseconds())
-	// The slot is still held here, so the write gets a deadline. It is cleared
-	// after: the connection may be reused for a run that takes longer.
-	rc := http.NewResponseController(w)
-	_ = rc.SetWriteDeadline(time.Now().Add(ResponseWriteTimeout))
-	defer func() { _ = rc.SetWriteDeadline(time.Time{}) }()
+	defer writeDeadline(w)()
 	if err := writeRun(w, res); err != nil {
 		s.opt.Log.Info("run response not delivered", "run", job.ID, "err", err)
 	}
