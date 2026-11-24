@@ -1,4 +1,4 @@
-// Package api is kandang's HTTP surface: GET /health and POST /v1/runs. It
+// Package api is kandang's HTTP surface: GET /health, POST /v1/runs and POST /mcp. It
 // validates every request against kandang's own schema, so a caller can only
 // pick a language, the code, input files and a timeout; never an image,
 // mounts, devices, capabilities or runtime flags.
@@ -75,6 +75,7 @@ func New(opt Options) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("POST /v1/runs", s.run)
+	mux.HandleFunc("/mcp", s.mcp)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
