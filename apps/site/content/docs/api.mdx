@@ -3,11 +3,11 @@ title: API
 description: One endpoint to run code, and one to check health.
 ---
 
-Kandang has two endpoints and no others.
+Kandang has three endpoints and no others: `POST /v1/runs`, `GET /health`, and `POST /mcp` for [MCP clients](/docs/mcp).
 
 ## Authentication
 
-`POST /v1/runs` needs a bearer token:
+`POST /v1/runs` and `POST /mcp` need a bearer token:
 
 ```http
 Authorization: Bearer <token>

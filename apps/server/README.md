@@ -79,6 +79,10 @@ Errors are `{"error": "<code>", "message": "..."}`:
 | 500 | `internal` (the message carries the run id; details stay in the log) |
 | 503 | `not_ready` |
 
+### `POST /mcp`
+
+The same run as an MCP tool, for any MCP client: Streamable HTTP, stateless (one JSON-RPC message per request, a JSON reply, no sessions, no SSE), behind the same bearer token. It speaks MCP `2025-11-25`, `2025-06-18` and `2025-03-26`, and offers one tool, `run`, whose arguments are the `POST /v1/runs` body. The result's first block is the run as JSON without file contents. Each output file follows: PNG, JPEG, GIF and WebP as `image` content (only when the bytes really are one), everything else as an embedded `resource` at `kandang://runs/<id>/out/<name>`, text as `text` and the rest as a base64 `blob`. One reply carries at most 20 MiB of files; the rest are listed in `filesDropped`. A non-zero exit, a timeout, bad arguments, a busy queue or a sandbox that isn't ready are `isError` results. Requests with an `Origin` header get 403, and `GET`/`DELETE` get 405.
+
 There are no other endpoints.
 
 ## Limits
