@@ -46,7 +46,8 @@ const mcpInstructions = "Kandang runs Python or bash in a throwaway gVisor sandb
 	"Pass input files base64 encoded; the code finds them in /work/in. " +
 	"Whatever the code writes to /work/out comes back: images as image content, other files as embedded resources. " +
 	"The sandbox has numpy, pandas, matplotlib, Pillow, openpyxl, pypdf and python-docx, and nothing can be installed. " +
-	"Anything that needs the internet or a secret has to be fetched first and passed in as a file."
+	"Anything that needs the internet or a secret has to be fetched first and passed in as a file. " +
+	"matplotlib charts already get a house style (dark background, Inter, a colorblind-checked palette), so don't set a style, colors or fonts unless the user asks for them."
 
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -235,7 +236,8 @@ func (s *server) runToolDef() mcpToolDef {
 		Title: "Run code in a sandbox",
 		Description: "Run Python or bash in a fresh gVisor sandbox with no network, 1 CPU and a memory cap, then get back the exit code, stdout, stderr " +
 			"and the top-level files the code wrote to /work/out (at most 10). Images come back as image content, other files as embedded resources. " +
-			"Use it to compute, analyze data, or make charts, spreadsheets and documents. Python has numpy, pandas, matplotlib, Pillow, openpyxl, pypdf and python-docx.",
+			"Use it to compute, analyze data, or make charts, spreadsheets and documents. Python has numpy, pandas, matplotlib, Pillow, openpyxl, pypdf and python-docx. " +
+			"matplotlib charts get a house style by default (dark, Inter, colorblind-checked colors): don't set a style, colors or fonts unless asked.",
 		InputSchema: json.RawMessage(schema),
 		Annotations: mcpAnnotations{Title: "Run code in a sandbox", ReadOnlyHint: true, OpenWorldHint: false},
 	}
