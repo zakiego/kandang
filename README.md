@@ -18,7 +18,7 @@ Kandang never holds a secret. Anything that needs an API key stays in your agent
 - Hard caps per run through cgroup v2: 1 GiB memory with no swap, one CPU, 256 host pids, 64 processes inside, 60 s default and 300 s max timeout.
 - Input and output files are base64 in JSON. Names are cut to a basename, and output symlinks are never followed.
 - A small queue: 2 runs at once, 10 waiting, then `429` with `Retry-After`.
-- The sandbox image ships Python with numpy, pandas, matplotlib, Pillow, openpyxl, pypdf and python-docx, so an agent can turn a CSV into a chart or a spreadsheet.
+- The sandbox image ships Python with numpy, pandas, matplotlib, Pillow, openpyxl, pypdf and python-docx, so an agent can turn a CSV into a chart or a spreadsheet. Charts come out in a house style (dark, Inter, colorblind-checked colors) without any styling code.
 
 ## How it works
 
