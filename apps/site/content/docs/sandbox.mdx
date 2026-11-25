@@ -35,6 +35,10 @@ Every run gets its own gVisor sandbox: a user-space kernel that sits in front of
 | `/work` | 512 MB tmpfs per run |
 | Concurrency | 2 runs at once and 10 waiting, then `429 busy` |
 
+## Charts
+
+matplotlib charts get a house style with no code: a dark background, Inter, and a colorblind-checked palette in a fixed order. Bars are a bit narrower, and pies start at 12 o'clock with a thin gap between slices. Code that sets its own style, colors or sizes still wins.
+
 ## Measured
 
 On a Mac mini M4 (arm64):
