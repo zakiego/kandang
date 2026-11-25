@@ -13,6 +13,7 @@ Kandang never holds a secret. Anything that needs an API key stays in your agent
 ## Features
 
 - One endpoint, `POST /v1/runs`, guarded by a bearer token. Plus an unauthenticated `GET /health`.
+- An MCP server at `POST /mcp` (Streamable HTTP, stateless) with one `run` tool, so any MCP client can use it. Charts come back as images, other files as embedded resources.
 - Every run gets its own gVisor sandbox: no network, read-only root, non-root user (uid 10001), no capabilities, `noNewPrivileges`, and its own pid, network, ipc, uts and mount namespaces.
 - Hard caps per run through cgroup v2: 1 GiB memory with no swap, one CPU, 256 host pids, 64 processes inside, 60 s default and 300 s max timeout.
 - Input and output files are base64 in JSON. Names are cut to a basename, and output symlinks are never followed.

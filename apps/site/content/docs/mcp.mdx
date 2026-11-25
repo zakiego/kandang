@@ -1,0 +1,65 @@
+---
+title: MCP
+description: Use Kandang from any MCP client through one run tool.
+---
+
+Kandang is also an MCP server. Point any MCP client at `/mcp` and your agent gets one tool, `run`, without any code of its own.
+
+## Connect
+
+| Setting | Value |
+| --- | --- |
+| Transport | Streamable HTTP |
+| URL | `http://<host>:8080/mcp` |
+| Header | `Authorization: Bearer <token>` |
+
+It's the same bearer token as `POST /v1/runs`. The server is stateless: every request is one JSON-RPC message with a JSON reply. There are no sessions and no server-sent events, so `GET` and `DELETE` on `/mcp` answer 405. Requests with an `Origin` header are refused, since a browser page has no business calling it.
+
+It speaks MCP `2025-11-25`, `2025-06-18` and `2025-03-26`. It answers `initialize`, `ping`, `tools/list` and `tools/call`.
+
+## The run tool
+
+The arguments are the body of [`POST /v1/runs`](/docs/api#run-code):
+
+```json
+{
+  "language": "python",
+  "code": "import pandas as pd\ndf = pd.read_csv('/work/in/sales.csv')\ndf.plot().get_figure().savefig('/work/out/sales.png')\nprint(len(df))",
+  "files": [{ "name": "sales.csv", "content": "<base64>" }],
+  "timeoutSec": 60
+}
+```
+
+The tool is marked `readOnlyHint: true`. A run can't change anything outside its own sandbox, which is gone when the run ends.
+
+## The result
+
+The first content block is text: the run as JSON, the same fields as the HTTP response but without the file contents. Each file has a `mimeType` and says how it came back in `as`.
+
+```json
+{
+  "exitCode": 0,
+  "timedOut": false,
+  "durationMs": 1381,
+  "peakMemoryMb": 101.4,
+  "stdout": "500\n",
+  "stderr": "",
+  "stdoutTruncated": false,
+  "stderrTruncated": false,
+  "files": [
+    { "name": "sales.png", "size": 22359, "mimeType": "image/png", "as": "image" },
+    { "name": "summary.csv", "size": 812, "mimeType": "text/csv", "as": "resource", "uri": "kandang://runs/<id>/out/summary.csv" }
+  ]
+}
+```
+
+Then one block per output file, in the same order:
+
+- PNG, JPEG, GIF and WebP files are `image` content, so the model can look at a chart it just made. A file is only sent as an image when its bytes are one.
+- Every other file is an embedded `resource`, with a `kandang://runs/<id>/out/<name>` URI. Text (CSV, JSON, Markdown, SVG and the like) comes as `text`, anything else as a base64 `blob`.
+
+One reply carries at most 20 MiB of files. Past that, files are listed in `filesDropped`. Use `POST /v1/runs` when you need bigger outputs.
+
+## Errors
+
+A run that exits non-zero or times out is a result with `isError: true`, so the model sees that it failed and can read stderr. Bad arguments, a busy queue (try again in about 10 seconds) and a sandbox that isn't ready are `isError` results too, with the reason as text. Only an unknown tool or malformed params are JSON-RPC errors.
