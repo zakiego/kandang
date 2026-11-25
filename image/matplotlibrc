@@ -1,20 +1,20 @@
-## Kandang's house style for matplotlib: a dark surface, Inter, and a
+## Kandang's house style for matplotlib: a light surface, Inter, and a
 ## colorblind-checked categorical palette (in fixed order). Every run gets it
 ## through MPLCONFIGDIR=/opt/mpl; code that sets its own style still wins.
 ## sitecustomize.py adds the defaults an rc file can't hold (bar width, pie gaps).
 
 ## Surface and text
 figure.figsize:     8, 5
-figure.facecolor:   0f1011
-axes.facecolor:     0f1011
-savefig.facecolor:  0f1011
-text.color:         f7f8f8
-axes.titlecolor:    f7f8f8
-axes.labelcolor:    8a8f98
-axes.edgecolor:     34343a
-xtick.color:        8a8f98
-ytick.color:        8a8f98
-legend.labelcolor:  8a8f98
+figure.facecolor:   fcfcfb
+axes.facecolor:     fcfcfb
+savefig.facecolor:  auto   # follows the figure, so code that sets its own background wins
+text.color:         0b0b0b
+axes.titlecolor:    0b0b0b
+axes.labelcolor:    52514e
+axes.edgecolor:     d9d8d3
+xtick.color:        52514e
+ytick.color:        52514e
+legend.labelcolor:  52514e
 
 ## Type
 font.family:        Inter, DejaVu Sans
@@ -25,8 +25,8 @@ axes.titlelocation: left
 axes.titlepad:      16
 axes.labelpad:      8
 
-## Series colors, in this order (dark steps of the palette)
-axes.prop_cycle:    cycler('color', ['3987e5', 'd95926', '199e70', 'c98500', 'd55181', '0ca30c', '9085e9', 'e66767'])
+## Series colors, in this order (light steps of the palette)
+axes.prop_cycle:    cycler('color', ['2a78d6', 'eb6834', '1baf7a', 'eda100', 'e87ba4', '008300', '6250d6', 'e34948'])
 
 ## Marks
 lines.linewidth:        2.2
@@ -43,7 +43,7 @@ axes.grid:          True
 axes.grid.axis:     y
 axes.axisbelow:     True
 axes.xmargin:       0.03
-grid.color:         23252a
+grid.color:         ebeae6
 grid.linewidth:     0.8
 grid.linestyle:     -
 xtick.major.size:   0
